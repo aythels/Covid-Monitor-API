@@ -3,7 +3,7 @@ from django.db import models
 
 class TimeSeries(models.Model):
     TYPECHOICE = [('D', 'Deaths'), ('C', 'Confirmed'),
-                  ('A', 'Active'), ('R', 'Recovered')]
+                  ('R', 'Recovered')]
     type = models.CharField(max_length=1, choices=TYPECHOICE)
     timeseries_name = models.CharField(max_length=1000)
     province_state = models.CharField(max_length=1000)
@@ -21,7 +21,8 @@ class TimeSeriesData(models.Model):
     Represents a single Buoy datapoint
     """
     timeseries = models.ForeignKey(TimeSeries, on_delete=models.CASCADE)
-    date = models.DateTimeField()
+    # Due to format of CSV, formatting for date is too much of hassle
+    date = models.CharField(max_length=1000)
     cases = models.IntegerField()
 
     def __str__(self):
