@@ -46,6 +46,9 @@ def timeseries_post(request, timeseries_name):
         province_state, country_region, latitude, longitude = row[province_state_key], row[
             country_region_key], row[latitude_key], row[longitude_key]
 
+        latitude = 0.0 if latitude == '' else latitude
+        longitude = 0.0 if longitude == '' else longitude
+
         # check if timeseries row already exists
         timeseries_cp = TimeSeries.objects.filter(type=data_type, timeseries_name=timeseries_name, province_state=province_state,
                                                   country_region=country_region)
@@ -57,17 +60,26 @@ def timeseries_post(request, timeseries_name):
                                     country_region=country_region, latitude=latitude, longitude=longitude)
             timeseries.save()
 
+        timeseries_data_all_cp = TimeSeriesData.objects.filter(
+            timeseries=timeseries)
+
+        timeseries_update_arr = []
+        timeseries_create_arr = []
         for date in dates:
             cases = row[date]
-            timeseries_data_cp = TimeSeriesData.objects.filter(
-                timeseries=timeseries, date=date).first()
+            cases = -1 if cases == '' else cases
+            # check if data already recorded for this date
+            timeseries_data_cp = timeseries_data_all_cp.filter(date=date)
             if timeseries_data_cp:
                 timeseries_data_cp.cases = cases
-                timeseries_data_cp.save()
+                timeseries_update_arr.append(timeseries_data_cp)
             else:
                 timeseries_data = TimeSeriesData(
                     timeseries=timeseries, date=date, cases=cases)
-                timeseries_data.save()
+                timeseries_create_arr.append(timeseries_data)
+
+        TimeSeriesData.objects.bulk_create(timeseries_create_arr)
+        TimeSeriesData.objects.bulk_update(timeseries_update_arr, ['cases'])
 
     return HttpResponse('Upload Successfull')
 
