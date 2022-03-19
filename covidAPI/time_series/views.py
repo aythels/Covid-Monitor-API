@@ -14,15 +14,17 @@ CONSTS = {'province_state_key': 'Province/State',
           'longitude_key': 'Long'}
 
 
-@csrf_exempt
 def timeseries(request, timeseries_name, data_type):
     if request.method == 'POST':
         return timeseries_post(request, timeseries_name, data_type)
     elif request.method == 'GET':
         return timeseries_get(request, timeseries_name, data_type)
-    elif request.method == 'DELETE':
-        return timeseries_delete(timeseries_name)
+    return HttpResponse('Internal server error', status=500)
 
+
+def timeseries_delete(request, timeseries_name):
+    if request.method == 'DELETE':
+        return timeseries_delete(request, timeseries_name)
     return HttpResponse('Internal server error', status=500)
 
 
@@ -77,13 +79,15 @@ def _post_body_check(reader):
                 return HttpResponse('Invalid File Contents', status=422)
 
 
+@csrf_exempt
 def timeseries_post(request, timeseries_name, data_type):
 
-    if data_type.upper() not in TimeSeries.TypeChoice:
+    try:
+        data_type = TimeSeries.TypeChoice[data_type.upper()]
+    except:
         return HttpResponse('Malformed Content', status=400)
-    # Parameters
-    body = request.body.decode('utf-8')
 
+    body = request.body.decode('utf-8')
     # Writing CSV
     # reader = csv.reader(body.split('\n'), delimiter=',')
     # header_dates = next(reader, None)[4:]
@@ -101,7 +105,7 @@ def timeseries_post(request, timeseries_name, data_type):
         # Writing TimeSeries
         data = {
             "timeseries_name": timeseries_name,
-            "data_type": TimeSeries.TypeChoice[data_type.upper()],
+            "data_type": data_type,
             "province_state": row[0],
             "country_region": row[1],
             "lat": row[2] if row[2] != '' else 0.0,
@@ -148,11 +152,10 @@ def timeseries_post(request, timeseries_name, data_type):
     return HttpResponse('Upload successful', status=200)
 
 
+@csrf_exempt
 def timeseries_get(request, timeseries_name, data_type):
     # TODO: VERIFY PARAMETERS
-    # return HttpResponse('Invalid file contents', status=422)
-
-    # parameters
+    # TODO: Currently does not support active type, active is calculated as confirmed - death - recovered
     countries = request.GET['countries'].split(
         ",") if 'countries' in request.GET else None
     regions = request.GET['regions'].split(
@@ -186,7 +189,8 @@ def timeseries_get(request, timeseries_name, data_type):
     return HttpResponse('Malformed request', status=400)
 
 
-def timeseries_delete(timeseries_name):
+@csrf_exempt
+def timeseries_delete(request, timeseries_name):
     # Getting associated data entries
     timeseries_entries = TimeSeries.objects.filter(
         timeseries_name=timeseries_name)
