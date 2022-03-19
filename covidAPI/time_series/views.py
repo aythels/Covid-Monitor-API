@@ -1,11 +1,9 @@
-from datetime import datetime
 from io import StringIO
 from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.core import serializers
 from django.http import JsonResponse
 import csv
-import datetime
 
 from time_series.models import TimeSeries, TimeSeriesData
 from datetime import date, time, datetime
@@ -28,18 +26,76 @@ def timeseries(request, timeseries_name, data_type):
     return HttpResponse('Internal server error', status=500)
 
 
-def timeseries_post(request, timeseries_name, data_type):
-    # TODO: VERIFY BODY (can probably just brute force this with a try and catch block)
-    # return HttpResponse('Invalid file contents', status=422)
+def _post_body_check(reader):
+    cols_count = len(reader.fieldnames)
+    if cols_count < 5:
+        return HttpResponse('Malformed Content', status=400)
 
+    province_state_key, country_region_key, latitude_key, longitude_key, \
+        *dates = reader.fieldnames
+
+    if province_state_key != CONSTS['province_state_key'] or \
+            country_region_key != CONSTS['country_region_key'] or \
+            latitude_key != CONSTS['latitude_key'] or \
+            longitude_key != CONSTS['longitude_key']:
+        return HttpResponse('Malformed Content', status=400)
+
+    for date in dates:
+        try:
+            date = datetime.strptime(date, "%m/%d/%y")
+        except:
+            return HttpResponse('Invalid File Contents', status=422)
+
+    for row in reader:
+        if len(row) != cols_count:
+            return HttpResponse('Malformed Content', status=400)
+
+        province_state, country_region, latitude, longitude = row[province_state_key], row[
+            country_region_key], row[latitude_key], row[longitude_key]
+
+        latitude = 0.0 if latitude == '' else latitude
+        longitude = 0.0 if longitude == '' else longitude
+
+        try:
+            latitude = float(latitude)
+            longitude = float(longitude)
+        except:
+            return HttpResponse('Invalid File Contents', status=422)
+
+        if country_region == '':  # Country cannot be empty
+            return HttpResponse('Invalid File Contents', status=422)
+        if -90 > latitude or latitude > 90 or -180 > longitude or longitude > 180:
+            return HttpResponse('Invalid File Contents', status=422)
+
+        for date in dates:
+            cases = row[date]
+            try:
+                cases = int(cases)
+            except:
+                return HttpResponse('Invalid File Contents', status=422)
+            if cases < 0:
+                return HttpResponse('Invalid File Contents', status=422)
+
+
+def timeseries_post(request, timeseries_name, data_type):
+
+    if data_type.upper() not in TimeSeries.TypeChoice:
+        return HttpResponse('Malformed Content', status=400)
     # Parameters
     body = request.body.decode('utf-8')
 
     # Writing CSV
+    # reader = csv.reader(body.split('\n'), delimiter=',')
+    # header_dates = next(reader, None)[4:]
+    # TODO: change this to such that the readers are uniformed; currently uses a DictReader and normal reader
+    f_body = StringIO(body)
+    reader = csv.DictReader(f_body, delimiter=',')
+    res = _post_body_check(reader)
+    if res:
+        return res
+
     reader = csv.reader(body.split('\n'), delimiter=',')
     header_dates = next(reader, None)[4:]
-    to_create = []
-    to_update = []
 
     for row in reader:
         # Writing TimeSeries
@@ -48,16 +104,24 @@ def timeseries_post(request, timeseries_name, data_type):
             "data_type": TimeSeries.TypeChoice[data_type.upper()],
             "province_state": row[0],
             "country_region": row[1],
-            "lat": row[2],
-            "long": row[3],
+            "lat": row[2] if row[2] != '' else 0.0,
+            "long": row[3] if row[3] != '' else 0.0,
         }
 
         # Search for TimeSeries and create it if it does not exist
         # TODO: Allow overwriting of province_state, country_region and lat and long fields?
-        timeseries_entry = TimeSeries.objects.filter(**data).first()
+        timeseries_entry = TimeSeries.objects.filter(data_type=data["data_type"], timeseries_name=data["timeseries_name"],
+                                                     province_state=data["province_state"], country_region=data["country_region"]).first()
         if not timeseries_entry:
             timeseries_entry = TimeSeries(**data)
             timeseries_entry.save()
+
+        to_create = []
+        to_update = []
+
+        timeseries_data_entry_all = TimeSeriesData.objects.filter(
+            timeseries=timeseries_entry
+        )
 
         # Writing TimeSeriesData
         for index, value in enumerate(row[4:]):
@@ -68,8 +132,7 @@ def timeseries_post(request, timeseries_name, data_type):
             }
 
             # Search for TimeSeriesData by timeseries and date and create it if it does not exist
-            timeseries_data_entry = TimeSeriesData.objects.filter(
-                timeseries=data["timeseries"],
+            timeseries_data_entry = timeseries_data_entry_all.filter(
                 date=data["date"]).first()
             if not timeseries_data_entry:
                 timeseries_data_entry = TimeSeriesData(**data)
@@ -78,9 +141,9 @@ def timeseries_post(request, timeseries_name, data_type):
                 timeseries_data_entry.cases = data["cases"]
                 to_update.append(timeseries_data_entry)
 
-    # Update or Create all TimeSeriesData at once
-    TimeSeriesData.objects.bulk_create(to_create)
-    TimeSeriesData.objects.bulk_update(to_update, ['cases'])
+        # Update or Create all TimeSeriesData each iteration. **Tried updating all at once but incremental update still has fastest speed
+        TimeSeriesData.objects.bulk_create(to_create)
+        TimeSeriesData.objects.bulk_update(to_update, ['cases'])
 
     return HttpResponse('Upload successful', status=200)
 
@@ -90,10 +153,14 @@ def timeseries_get(request, timeseries_name, data_type):
     # return HttpResponse('Invalid file contents', status=422)
 
     # parameters
-    countries = request.GET['countries'].split(",") if 'countries' in request.GET else None
-    regions = request.GET['regions'].split(",") if 'regions' in request.GET else None
-    start_date = convert_date(request.GET['start_date']) if 'start_date' in request.GET else date.min
-    end_date = convert_date(request.GET['end_date']) if 'end_date' in request.GET else date.max
+    countries = request.GET['countries'].split(
+        ",") if 'countries' in request.GET else None
+    regions = request.GET['regions'].split(
+        ",") if 'regions' in request.GET else None
+    start_date = convert_date(
+        request.GET['start_date']) if 'start_date' in request.GET else date.min
+    end_date = convert_date(
+        request.GET['end_date']) if 'end_date' in request.GET else date.max
     format = request.GET['format'] if 'format' in request.GET else 'csv'
 
     # Creating query
@@ -101,14 +168,17 @@ def timeseries_get(request, timeseries_name, data_type):
         "timeseries_name": timeseries_name,
         "data_type": TimeSeries.TypeChoice[data_type.upper()],
     }
-    if countries: query["country_region__in"] = countries
-    if regions: query["province_state__in"] = regions
+    if countries:
+        query["country_region__in"] = countries
+    if regions:
+        query["province_state__in"] = regions
 
     # Getting associated data entries based on query
     timeseries_list = TimeSeries.objects.filter(**query)
 
     if timeseries_list:
-        timeseriesdata_list = TimeSeriesData.objects.filter(timeseries__in=timeseries_list, date__range=[start_date, end_date])
+        timeseriesdata_list = TimeSeriesData.objects.filter(
+            timeseries__in=timeseries_list, date__range=[start_date, end_date])
         if format == "json":
             return gen_response_json(timeseries_list, timeseriesdata_list)
         return gen_response_csv(timeseries_list, timeseriesdata_list)
@@ -118,7 +188,8 @@ def timeseries_get(request, timeseries_name, data_type):
 
 def timeseries_delete(timeseries_name):
     # Getting associated data entries
-    timeseries_entries = TimeSeries.objects.filter(timeseries_name=timeseries_name)
+    timeseries_entries = TimeSeries.objects.filter(
+        timeseries_name=timeseries_name)
 
     # Deleting entries
     if timeseries_entries:
@@ -148,7 +219,8 @@ def gen_response_csv(timeseries_list, timeseriesdata_list):
         dates.append(date.strftime("%m/%d/%y"))
 
     writer = csv.writer(response)
-    writer.writerow(['Province/State', 'Country/Region', 'Lat', 'Long'] + dates)
+    writer.writerow(
+        ['Province/State', 'Country/Region', 'Lat', 'Long'] + dates)
 
     for timeseries in timeseries_list:
         prefix = [
@@ -158,7 +230,8 @@ def gen_response_csv(timeseries_list, timeseriesdata_list):
             timeseries.long,
         ]
 
-        suffix = timeseriesdata_list.filter(timeseries=timeseries).values_list('cases', flat=True).order_by('date')
+        suffix = timeseriesdata_list.filter(timeseries=timeseries).values_list(
+            'cases', flat=True).order_by('date')
         writer.writerow(prefix + list(suffix))
 
     return response
@@ -174,4 +247,4 @@ def convert_date(date):
 
     new_date = month + "-" + day + "-" + year
 
-    return datetime.datetime.strptime(new_date, '%m-%d-%y')
+    return datetime.strptime(new_date, '%m-%d-%y')
