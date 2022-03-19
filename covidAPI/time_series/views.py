@@ -102,7 +102,7 @@ def timeseries_get(request, timeseries_name, data_type):
     timeseries_list = TimeSeries.objects.filter(**query)
 
     if timeseries_list:
-        timeseriesdata_list = TimeSeriesData.objects.filter(timeseries__in=timeseries_list)
+        timeseriesdata_list = TimeSeriesData.objects.filter(timeseries__in=timeseries_list, date__range=[start_date, end_date])
         if format == "json":
             return gen_response_json(timeseries_list, timeseriesdata_list)
         return gen_response_csv(timeseries_list, timeseriesdata_list)
