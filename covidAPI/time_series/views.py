@@ -7,10 +7,7 @@ import csv
 from time_series.models import TimeSeries, TimeSeriesData
 from datetime import date, datetime
 
-CONSTS = {'province_state_key': 'Province/State',
-          'country_region_key': 'Country/Region',
-          'latitude_key': 'Lat',
-          'longitude_key': 'Long'}
+# TODO Probably need a try catch block when saving to database due to character count or database errors
 
 @csrf_exempt
 def timeseries(request, timeseries_name, data_type):
@@ -19,93 +16,45 @@ def timeseries(request, timeseries_name, data_type):
     elif request.method == 'GET':
         return timeseries_get(request, timeseries_name, data_type)
     elif request.method == 'DELETE':
-        return timeseries_delete(timeseries_name)
+        return timeseries_delete(request, timeseries_name)
     return HttpResponse('Internal server error', status=500)
 
 
-def _post_body_check(reader):
-    cols_count = len(reader.fieldnames)
-    if cols_count < 5:
-        return HttpResponse('Malformed Content', status=400)
-
-    province_state_key, country_region_key, latitude_key, longitude_key, \
-    *dates = reader.fieldnames
-
-    if province_state_key != CONSTS['province_state_key'] or \
-            country_region_key != CONSTS['country_region_key'] or \
-            latitude_key != CONSTS['latitude_key'] or \
-            longitude_key != CONSTS['longitude_key']:
-        return HttpResponse('Malformed Content', status=400)
-
-    for date in dates:
-        try:
-            date = datetime.strptime(date, "%m/%d/%y")
-        except:
-            return HttpResponse('Invalid File Contents', status=422)
-
-    for row in reader:
-        if len(row) != cols_count:
-            return HttpResponse('Malformed Content', status=400)
-
-        province_state, country_region, latitude, longitude = row[province_state_key], row[
-            country_region_key], row[latitude_key], row[longitude_key]
-
-        latitude = 0.0 if latitude == '' else latitude
-        longitude = 0.0 if longitude == '' else longitude
-
-        try:
-            latitude = float(latitude)
-            longitude = float(longitude)
-        except:
-            return HttpResponse('Invalid File Contents', status=422)
-
-        if country_region == '':  # Country cannot be empty
-            return HttpResponse('Invalid File Contents', status=422)
-        if -90 > latitude or latitude > 90 or -180 > longitude or longitude > 180:
-            return HttpResponse('Invalid File Contents', status=422)
-
-        for date in dates:
-            cases = row[date]
-            try:
-                cases = int(cases)
-            except:
-                return HttpResponse('Invalid File Contents', status=422)
-            if cases < 0:
-                return HttpResponse('Invalid File Contents', status=422)
-
-
-@csrf_exempt
 def timeseries_post(request, timeseries_name, data_type):
-    # TODO FIX DATA TYPE
+    # Getting and verifying parameters
+    params = parse_post_params(timeseries_name, data_type)
+    if not params:
+        return HttpResponse('Malformed request', status=400)
 
-    try:
-        data_type = TimeSeries.TypeChoice[data_type.upper()]
-    except:
-        return HttpResponse('Malformed Content', status=400)
-
+    # Processing body
     body = request.body.decode('utf-8')
-    # Writing CSV
-    # reader = csv.reader(body.split('\n'), delimiter=',')
-    # header_dates = next(reader, None)[4:]
-    # TODO: change this to such that the readers are uniformed; currently uses a DictReader and normal reader
-    f_body = StringIO(body)
-    reader = csv.DictReader(f_body, delimiter=',')
-    res = _post_body_check(reader)
-    if res:
-        return res
 
     reader = csv.reader(body.split('\n'), delimiter=',')
-    header_dates = next(reader, None)[4:]
 
+    # Array of header titles and date objects
+    parsed_header = parse_post_header(next(reader, None))
+    if not parsed_header:
+        return HttpResponse('Malformed request', status=400)
+
+    # Array of row data objects
+    parsed_rows = []
+
+    # May be less memory efficient to do it this way but its a lot cleaner
     for row in reader:
+        parsed_row = parse_post_row(parsed_header, row)
+        if not parsed_row:
+            return HttpResponse('Malformed request', status=400)
+        parsed_rows.append(parsed_row)
+
+    for row in parsed_rows:
         # Writing TimeSeries
         data = {
-            "timeseries_name": timeseries_name,
-            "data_type": data_type,
-            "province_state": row[0],
-            "country_region": row[1],
-            "lat": row[2] if row[2] != '' else 0.0,
-            "long": row[3] if row[3] != '' else 0.0,
+            "timeseries_name": params["timeseries_name"],
+            "data_type": params["data_type"],
+            "province_state": row['Province/State'],
+            "country_region": row['Country/Region'],
+            "lat": row['Lat'],
+            "long": row['Long'],
         }
 
         timeseries_entry, created = TimeSeries.objects.update_or_create(
@@ -124,11 +73,11 @@ def timeseries_post(request, timeseries_name, data_type):
         )
 
         # Writing TimeSeriesData
-        for index, value in enumerate(row[4:]):
+        for index, date in enumerate(parsed_header[4:]):
             data = {
                 "timeseries": timeseries_entry,
-                "date": convert_date(header_dates[index]),
-                "cases": value,
+                "date": date,
+                "cases": row['CASES'][index],
             }
 
             # Search for TimeSeriesData by timeseries and date and create it if it does not exist
@@ -147,8 +96,9 @@ def timeseries_post(request, timeseries_name, data_type):
     return HttpResponse('Upload successful', status=200)
 
 
-@csrf_exempt
 def timeseries_get(request, timeseries_name, data_type):
+    # TODO FIX ACTIVE FETCH
+
     # Getting and verifying parameters
     params = parse_get_params(request, timeseries_name, data_type)
     if not params:
@@ -160,7 +110,7 @@ def timeseries_get(request, timeseries_name, data_type):
     }
 
     if params["data_type"] != "ACTIVE":
-        query["data_type"] = TimeSeries.TypeChoice[params["data_type"]]
+        query["data_type"] = params["data_type"]
     if params["countries"]:
         query["country_region__in"] = params["countries"]
     if params["regions"]:
@@ -179,8 +129,7 @@ def timeseries_get(request, timeseries_name, data_type):
     return HttpResponse('Malformed request', status=400)
 
 
-@csrf_exempt
-def timeseries_delete(timeseries_name):
+def timeseries_delete(request, timeseries_name):
     # Getting associated data entries
     timeseries_entries = TimeSeries.objects.filter(
         timeseries_name=timeseries_name)
@@ -194,6 +143,95 @@ def timeseries_delete(timeseries_name):
 
 
 # **************************************************************************************************** HELPER FUNCTIONS
+
+def parse_post_header(header):
+    # Not enough columns
+    if len(header) < 5:
+        return None
+
+    # Invalid columns headers
+    if header[0] != 'Province/State':
+        return None
+    if header[1] != 'Country/Region':
+        return None
+    if header[2] != 'Lat':
+        return None
+    if header[3] != 'Long':
+        return None
+
+    # Invalid column dates
+    dates = []
+    for date in header[4:]:
+        try:
+            date_obj = datetime.strptime(date, "%m/%d/%y")
+            dates.append(date_obj)
+        except ValueError:
+            return None
+
+    return header[:4] + dates
+
+
+def parse_post_row(header, row):
+    # Not enough columns
+    if len(row) != len(header):
+        return None
+
+    params = {
+        'Province/State': row[0],
+        'Country/Region': row[1],
+        'Lat': 0.0 if row[2] == '' else row[2],
+        'Long': 0.0 if row[3] == '' else row[3],
+        'CASES': [],
+    }
+
+    # Country cannot be empty
+    if params['Country/Region'] == '':
+        return None
+
+    # Latitude or longitude must be floats and within valid bounds
+    try:
+        params['Lat'] = float(params['Lat'])
+    except ValueError:
+        return None
+    try:
+        params['Long'] = float(params['Long'])
+    except ValueError:
+        return None
+
+    if -90 > params['Lat'] or params['Lat'] > 90 or -180 > params['Long'] or params['Long'] > 180:
+        return None
+
+    # Cases must be integers > 0
+    for cases in row[4:]:
+        if not cases.isdigit():
+            return None
+        params['CASES'].append(cases)
+
+    return params
+
+
+def parse_post_params(timeseries_name, data_type):
+    params = {
+        "timeseries_name": None,
+        "data_type": None,
+    }
+
+    # timeseries_name
+    if timeseries_name:
+        params["timeseries_name"] = timeseries_name
+    else:
+        return None
+
+    # data_type
+    if data_type:
+        if data_type.upper() not in ["DEATHS", "CONFIRMED", "RECOVERED"]:
+            return None
+        params["data_type"] = TimeSeries.TypeChoice[data_type.upper()]
+    else:
+        return None
+
+    return params
+
 
 def parse_get_params(request, timeseries_name, data_type):
     params = {
@@ -216,7 +254,7 @@ def parse_get_params(request, timeseries_name, data_type):
     if data_type:
         if data_type.upper() not in ["DEATHS", "CONFIRMED", "ACTIVE", "RECOVERED"]:
             return None
-        params["data_type"] = data_type.upper()
+        params["data_type"] = TimeSeries.TypeChoice[data_type.upper()]
     else:
         return None
 
@@ -306,18 +344,3 @@ def gen_response_csv(timeseries_list, timeseriesdata_list):
         writer.writerow(prefix + list(suffix))
 
     return response
-
-
-def convert_date(date):
-    # This function converts a date string in the format of 1/23/20 to a date object in the format of 2020-01-23
-    # This function is for reading csv date headers to store in the database as date objets
-
-    date_split = date.split('/')
-
-    month = date_split[0].zfill(2)
-    day = date_split[1].zfill(2)
-    year = date_split[2]
-
-    new_date = month + "-" + day + "-" + year
-
-    return datetime.strptime(new_date, '%m-%d-%y')
