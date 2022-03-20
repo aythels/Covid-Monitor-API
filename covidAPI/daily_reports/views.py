@@ -26,7 +26,7 @@ def dailyreports_post(request, dailyreport_name):
 
     # Validating header
     header = next(reader)
-    if validate_header(header) is False:
+    if not validate_header(header):
         return HttpResponse('Malformed request', status=400)
 
     create_queue = []
@@ -36,7 +36,7 @@ def dailyreports_post(request, dailyreport_name):
         data = parse_post_row(header, row)
 
         # Validating row
-        if data is None:
+        if not data:
             return HttpResponse('Malformed request', status=400)
 
         data['dailyreport_name'] = dailyreport_name
@@ -74,18 +74,18 @@ def dailyreports_post(request, dailyreport_name):
 def dailyreports_get(request, dailyreport_name):
     # validating params
     params = parse_get_params(request, dailyreport_name)
-    if params is None:
+    if not params:
         return HttpResponse('Malformed request', status=400)
 
     query = {
         "dailyreport_name": params["dailyreport_name"],
         "last_update__range": [params["start_date"], params["end_date"]]
     }
-    if params["countries"] is not None:
+    if params["countries"]:
         query["country_region__in"] = params["countries"]
-    if params["regions"] is not None:
+    if params["regions"]:
         query["province_state__in"] = params["regions"]
-    if params["combined_key"] is not None:
+    if params["combined_key"]:
         query["combined_key__exact"] = params["combined_key"]
 
     dailyreports_list = DailyReports.objects.filter(**query)
@@ -213,9 +213,9 @@ def validate_header(header):
         return False
     if header[11] != 'Combined_Key':
         return False
-    if header[12] != 'Incident_Rate':
+    if header[12] != 'Incidence_Rate':
         return False
-    if header[13] != 'Case_Fatality_Ratio':
+    if header[13] != 'Case-Fatality_Ratio':
         return False
 
     return True
