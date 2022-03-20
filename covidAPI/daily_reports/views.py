@@ -1,3 +1,4 @@
+from datetime import datetime, date
 from django.shortcuts import render
 
 # Create your views here.
@@ -42,18 +43,17 @@ def dailyreports_post(request, dailyreport_name):
         data = {
             k: row[i] for i, k in enumerate(keys)
         }
+        data['dailyreport_name'] = dailyreport_name
         # TODO: validate country_region non empty, last_update non empty, confirmed, deaths, recovered, active, incident_rate, case_fatality_ratio non empty
         _fill_empty(data)
-        dailyreports_entry = DailyReports.objects.filter(province_state=data["province_state"], country_region=data["country_region"],
+        dailyreports_entry = DailyReports.objects.filter(dailyreport_name=dailyreport_name, province_state=data["province_state"], country_region=data["country_region"],
                                                          last_update=data["last_update"]).first()
         if not dailyreports_entry:
             dailyreports_entry = DailyReports(**data)
             create_queue.append(dailyreports_entry)
         else:
-            dailyreports_entry.confirmed, dailyreports_entry.deaths, dailyreports_entry.recovered, dailyreports_entry.active,
-            dailyreports_entry.incident_rate, dailyreports_entry.case_fatality_ratio = data[
-                "confirmed"], data["deaths"], data["recovered"], data["active"],
-            data["incident_rate"], data["case_fatality_ratio"]
+            dailyreports_entry.confirmed, dailyreports_entry.deaths, dailyreports_entry.recovered, dailyreports_entry.active, dailyreports_entry.incident_rate, dailyreports_entry.case_fatality_ratio = data[
+                "confirmed"], data["deaths"], data["recovered"], data["active"], data["incident_rate"], data["case_fatality_ratio"]
             update_queue.append(dailyreports_entry)
 
     DailyReports.objects.bulk_create(create_queue)
@@ -64,8 +64,82 @@ def dailyreports_post(request, dailyreport_name):
 
 
 def dailyreports_get(request, dailyreport_name):
+    countries = request.GET['countries'].split(
+        ",") if 'countries' in request.GET else None
+    regions = request.GET['regions'].split(
+        ",") if 'regions' in request.GET else None
+    combined_key = request.GET['combined_key'] if 'combined_key' in request.GET else None
+    data_type = request.GET['data_type'].split(",") if 'data_type' in request.GET else [
+        'active', 'confirmed', 'deaths', 'recovered']
+    start_date = convert_date(
+        request.GET['start_date']) if 'start_date' in request.GET else date.min
+    end_date = convert_date(
+        request.GET['end_date']) if 'end_date' in request.GET else date.max
+    format = request.GET['format'] if 'format' in request.GET else 'csv'
+
+    query = {
+        "dailyreport_name": dailyreport_name,
+    }
+    if countries:
+        query["country_region__in"] = countries
+    if regions:
+        query["province_state__in"] = regions
+    if combined_key:
+        query["combined_key__exact"] = combined_key
+    query["last_update__range"] = [start_date, end_date]
+
+    dailyreports_list = DailyReports.objects.filter(**query)
+    if format == "json":
+        get_response_json(dailyreports_list, data_type)
+    else:
+        return get_response_csv(dailyreports_list, data_type)
+
     return HttpResponse('Received {}'.format(dailyreport_name))
 
 
 def dailyreports_delete(request, dailyreport_name):
-    return HttpResponse('Received {}'.format(dailyreport_name))
+    dailyreports_entries = DailyReports.objects.filter(
+        dailyreport_name=dailyreport_name)
+
+    if dailyreports_entries:
+        dailyreports_entries.delete()
+        return HttpResponse('Successfully deleted', status=200)
+    return HttpResponse('Dailyreports not found', status=404)
+
+
+def get_response_csv(dailyreports_list, data_type):
+    response = HttpResponse(content_type='application/csv')
+
+    writer = csv.writer(response)
+    writer.writerow(
+        ['Province_State', 'Country_Region', 'Last_Update'] + data_type +
+        ['Combined_Key', 'Incidence_Rate', 'Case-Fatality_Ratio']
+    )
+    for dailyreport in dailyreports_list:
+        prefix = [
+            dailyreport.province_state,
+            dailyreport.country_region,
+            dailyreport.last_update,
+        ]
+
+        middle = []
+        for type in data_type:
+            if type == "active":
+                middle.append(dailyreport.active)
+            elif type == "confirmed":
+                middle.append(dailyreport.confirmed)
+            elif type == "deaths":
+                middle.append(dailyreport.deaths)
+            else:
+                middle.append(dailyreport.recovered)
+        suffix = [
+            dailyreport.combined_key,
+            dailyreport.incident_rate,
+            dailyreport.case_fatality_ratio,
+        ]
+        writer.writerow(prefix + middle + suffix)
+    return response
+
+
+def convert_date(date):
+    return datetime.strptime(date, '%y-%m-%d')

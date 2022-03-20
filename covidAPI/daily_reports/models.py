@@ -6,6 +6,7 @@ from django.db import models
 
 
 class DailyReports(models.Model):
+    dailyreport_name = models.CharField(max_length=1000)
     fips = models.IntegerField()
     admin2 = models.CharField(max_length=1000)
     province_state = models.CharField(max_length=1000)
