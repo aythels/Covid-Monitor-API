@@ -116,10 +116,6 @@ def get_response_json(dailyreports_list, data_type):
             'Province_State': dailyreport.province_state,
             'Country_Region': dailyreport.country_region,
             'Last_Update': dailyreport.last_update.strftime("%Y-%m-%d %H:%M:%S"),
-            'active': -1,
-            'confirmed': -1,
-            'deaths': -1,
-            'recovered': -1,
             'Combined_Key': dailyreport.combined_key,
             'Incidence_Rate': dailyreport.incidence_rate,
             'Case-Fatality_Ratio': dailyreport.case_fatality_ratio,
@@ -133,15 +129,6 @@ def get_response_json(dailyreports_list, data_type):
             row["deaths"] = dailyreport.deaths
         if "recovered" in data_type:
             row["recovered"] = dailyreport.recovered
-
-        if row["active"] == -1:
-            row.pop("active", None)
-        if row["confirmed"] == -1:
-            row.pop("confirmed", None)
-        if row["deaths"] == -1:
-            row.pop("deaths", None)
-        if row["recovered"] == -1:
-            row.pop("recovered", None)
 
         data[index] = row
 
@@ -188,37 +175,16 @@ def validate_header(header):
     if len(header) < 14:
         return False
 
-    # Invalid columns headers
-    if header[0] != 'FIPS':
-        return False
-    if header[1] != 'Admin2':
-        return False
-    if header[2] != 'Province_State':
-        return False
-    if header[3] != 'Country_Region':
-        return False
-    if header[4] != 'Last_Update':
-        return False
-    if header[5] != 'Lat':
-        return False
-    if header[6] != 'Long_':
-        return False
-    if header[7] != 'Confirmed':
-        return False
-    if header[8] != 'Deaths':
-        return False
-    if header[9] != 'Recovered':
-        return False
-    if header[10] != 'Active':
-        return False
-    if header[11] != 'Combined_Key':
-        return False
-    if header[12] != 'Incidence_Rate':
-        return False
-    if header[13] != 'Case-Fatality_Ratio':
-        return False
-
+    # Invalid Column Headers
+    column_strings = ['FIPS', 'Admin2', 'Province_State', 'Country_Region', 'Last_Update', 'Lat', 'Long_', 'Confirmed', 'Deaths',
+    'Recovered', 'Active', 'Combined_Key', 'Incidence_Rate', 'Case-Fatality_Ratio']
+    for i in range(len(header)):
+        if header[i] != column_strings[i]:
+            print(header[i])
+            return False
     return True
+
+
 
 
 def parse_post_row(header, row):
@@ -245,79 +211,38 @@ def parse_post_row(header, row):
     }
 
     # Default value check
-    if params['country_region'] == "":
-        return None
-    if params['last_update'] == "":
-        return None
-    if params['lat'] == "":
-        return None
-    if params['long'] == "":
-        return None
-    if params['confirmed'] == "":
-        return None
-    if params['deaths'] == "":
-        return None
-    if params['recovered'] == "":
-        return None
-    if params['active'] == "":
-        return None
-    if params['incidence_rate'] == "":
-        return None
-    if params['case_fatality_ratio'] == "":
-        return None
+    non_empty_keys = ["country_region", "last_update", "lat", "long", "confirmed", "deaths", "recovered", "active", "incidence_rate", "case_fatality_ratio"]
+    for key in non_empty_keys:
+        if params[key] == "":
+            return None
 
     # Type check
 
-    if params['fips'] != "":
-        try:
-            params['fips'] = int(params['fips'])
-        except ValueError:
-            return None
+    def params_check(d_type, key):
+        if params[key] != "":
+            try:
+                params[key] = d_type(params[key])
+            except ValueError:
+                return False
+        return True
+
+
+    if not params_check(int, 'fips'): return None
+    if not params_check(float, 'lat'): return None
+    if not params_check(float, 'long'): return None
+    if not params_check(int, 'confirmed'): return None
+    if not params_check(int, 'deaths'): return None
+    if not params_check(int, 'recovered'): return None
+    if not params_check(int, 'active'): return None
+    if not params_check(float, 'incidence_rate'): return None
+    if not params_check(float, 'case_fatality_ratio'): return None
+
     if params['last_update'] != "":
         try:
-            params['last_update'] == datetime.strptime(params['last_update'], "%Y-%m-%d %H:%M:%S")
+            params['last_update'] = datetime.strptime(params['last_update'], "%Y-%m-%d %H:%M:%S")
         except ValueError:
             return None
-    if params['lat'] != "":
-        try:
-            params['lat'] = float(params['lat'])
-        except ValueError:
-            return None
-    if params['long'] != "":
-        try:
-            params['long'] = float(params['long'])
-        except ValueError:
-            return None
-    if params['confirmed'] != "":
-        try:
-            params['confirmed'] = int(params['confirmed'])
-        except ValueError:
-            return None
-    if params['deaths'] != "":
-        try:
-            params['deaths'] = int(params['deaths'])
-        except ValueError:
-            return None
-    if params['recovered'] != "":
-        try:
-            params['recovered'] = int(params['recovered'])
-        except ValueError:
-            return None
-    if params['active'] != "":
-        try:
-            params['active'] = int(params['active'])
-        except ValueError:
-            return None
-    if params['incidence_rate'] != "":
-        try:
-            params['incidence_rate'] = float(params['incidence_rate'])
-        except ValueError:
-            return None
-    if params['case_fatality_ratio'] != "":
-        try:
-            params['case_fatality_ratio'] = float(params['case_fatality_ratio'])
-        except ValueError:
-            return None
+
 
     # Other
 
