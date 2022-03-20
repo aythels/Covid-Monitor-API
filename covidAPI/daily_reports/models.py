@@ -19,5 +19,5 @@ class DailyReports(models.Model):
     recovered = models.IntegerField()
     active = models.IntegerField()
     combined_key = models.CharField(max_length=1000)
-    incident_rate = models.FloatField()
+    incidence_rate = models.FloatField()
     case_fatality_ratio = models.FloatField()

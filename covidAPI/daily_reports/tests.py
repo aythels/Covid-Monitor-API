@@ -24,7 +24,7 @@ class DailyReportsViewsTest(TestCase):
             "recovered": 300,
             "active": 190,
             "combined_key": "BC, Canada",
-            "incident_rate": 4.324,
+            "incidence_rate": 4.324,
             "case_fatality_ratio": 5.237,
         }
         DailyReports.objects.create(**params)

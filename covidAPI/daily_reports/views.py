@@ -53,7 +53,7 @@ def dailyreports_post(request, dailyreport_name):
             dailyreports_entry.deaths = data["deaths"]
             dailyreports_entry.recovered = data["recovered"]
             dailyreports_entry.active = data["active"]
-            dailyreports_entry.incident_rate = data["incident_rate"]
+            dailyreports_entry.incidence_rate = data["incidence_rate"]
             dailyreports_entry.case_fatality_ratio = data["case_fatality_ratio"]
             update_queue.append(dailyreports_entry)
 
@@ -64,7 +64,7 @@ def dailyreports_post(request, dailyreport_name):
         "deaths",
         "recovered",
         "active",
-        "incident_rate",
+        "incidence_rate",
         "case_fatality_ratio"
     ])
 
@@ -121,7 +121,7 @@ def get_response_json(dailyreports_list, data_type):
             'deaths': -1,
             'recovered': -1,
             'Combined_Key': dailyreport.combined_key,
-            'Incidence_Rate': dailyreport.incident_rate,
+            'Incidence_Rate': dailyreport.incidence_rate,
             'Case-Fatality_Ratio': dailyreport.case_fatality_ratio,
         }
 
@@ -176,7 +176,7 @@ def get_response_csv(dailyreports_list, data_type):
 
         suffix = [
             dailyreport.combined_key,
-            dailyreport.incident_rate,
+            dailyreport.incidence_rate,
             dailyreport.case_fatality_ratio,
         ]
         writer.writerow(prefix + middle + suffix)
@@ -240,7 +240,7 @@ def parse_post_row(header, row):
         "recovered": 0 if row[9] == '' else row[9],
         "active": 0 if row[10] == '' else row[10],
         "combined_key": row[11],
-        "incident_rate": row[12],
+        "incidence_rate": row[12],
         "case_fatality_ratio": row[13],
     }
 
@@ -261,7 +261,7 @@ def parse_post_row(header, row):
         return None
     if params['active'] == "":
         return None
-    if params['incident_rate'] == "":
+    if params['incidence_rate'] == "":
         return None
     if params['case_fatality_ratio'] == "":
         return None
@@ -308,9 +308,9 @@ def parse_post_row(header, row):
             params['active'] = int(params['active'])
         except ValueError:
             return None
-    if params['incident_rate'] != "":
+    if params['incidence_rate'] != "":
         try:
-            params['incident_rate'] = float(params['incident_rate'])
+            params['incidence_rate'] = float(params['incidence_rate'])
         except ValueError:
             return None
     if params['case_fatality_ratio'] != "":
