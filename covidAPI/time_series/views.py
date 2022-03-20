@@ -23,7 +23,7 @@ def timeseries(request, timeseries_name, data_type):
 def timeseries_post(request, timeseries_name, data_type):
     # Getting and verifying parameters
     params = parse_post_params(timeseries_name, data_type)
-    if not params:
+    if params is None:
         return HttpResponse('Malformed request', status=400)
 
     # Processing body
@@ -33,7 +33,7 @@ def timeseries_post(request, timeseries_name, data_type):
 
     # Array of header titles and date objects
     parsed_header = parse_post_header(next(reader, None))
-    if not parsed_header:
+    if parsed_header is None:
         return HttpResponse('Malformed request', status=400)
 
     # Array of row data objects
@@ -42,7 +42,7 @@ def timeseries_post(request, timeseries_name, data_type):
     # May be less memory efficient to do it this way but its a lot cleaner
     for row in reader:
         parsed_row = parse_post_row(parsed_header, row)
-        if not parsed_row:
+        if parsed_row is None:
             return HttpResponse('Malformed request', status=400)
         parsed_rows.append(parsed_row)
 
@@ -101,7 +101,7 @@ def timeseries_get(request, timeseries_name, data_type):
 
     # Getting and verifying parameters
     params = parse_get_params(request, timeseries_name, data_type)
-    if not params:
+    if params is None:
         return HttpResponse('Malformed request', status=400)
 
     # Creating query
@@ -111,9 +111,9 @@ def timeseries_get(request, timeseries_name, data_type):
 
     if params["data_type"] != "ACTIVE":
         query["data_type"] = params["data_type"]
-    if params["countries"]:
+    if params["countries"] is not None:
         query["country_region__in"] = params["countries"]
-    if params["regions"]:
+    if params["regions"] is not None:
         query["province_state__in"] = params["regions"]
 
     # Getting associated data entries based on query
