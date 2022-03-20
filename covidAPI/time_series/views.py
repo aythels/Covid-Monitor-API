@@ -1,30 +1,25 @@
 from io import StringIO
 from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.core import serializers
 from django.http import JsonResponse
 import csv
 
 from time_series.models import TimeSeries, TimeSeriesData
-from datetime import date, time, datetime
+from datetime import date, datetime
 
 CONSTS = {'province_state_key': 'Province/State',
           'country_region_key': 'Country/Region',
           'latitude_key': 'Lat',
           'longitude_key': 'Long'}
 
-
+@csrf_exempt
 def timeseries(request, timeseries_name, data_type):
     if request.method == 'POST':
         return timeseries_post(request, timeseries_name, data_type)
     elif request.method == 'GET':
         return timeseries_get(request, timeseries_name, data_type)
-    return HttpResponse('Internal server error', status=500)
-
-
-def timeseries_delete(request, timeseries_name):
-    if request.method == 'DELETE':
-        return timeseries_delete(request, timeseries_name)
+    elif request.method == 'DELETE':
+        return timeseries_delete(timeseries_name)
     return HttpResponse('Internal server error', status=500)
 
 
@@ -34,7 +29,7 @@ def _post_body_check(reader):
         return HttpResponse('Malformed Content', status=400)
 
     province_state_key, country_region_key, latitude_key, longitude_key, \
-        *dates = reader.fieldnames
+    *dates = reader.fieldnames
 
     if province_state_key != CONSTS['province_state_key'] or \
             country_region_key != CONSTS['country_region_key'] or \
@@ -79,8 +74,70 @@ def _post_body_check(reader):
                 return HttpResponse('Invalid File Contents', status=422)
 
 
+def parse_get_params(request, timeseries_name, data_type):
+    params = {
+        "timeseries_name": None,
+        "data_type": None,
+        "countries": None,
+        "regions": None,
+        "start_date": None,
+        "end_date": None,
+        "format": None,
+    }
+
+    # timeseries_name
+    if timeseries_name:
+        params["timeseries_name"] = timeseries_name
+    else:
+        return None
+
+    # data_type
+    if data_type:
+        if data_type.upper() not in ["DEATHS", "CONFIRMED", "ACTIVE", "RECOVERED"]:
+            return None
+        params["data_type"] = data_type.upper()
+    else:
+        return None
+
+    # countries
+    if 'countries' in request.GET:
+        params["countries"] = request.GET['countries'].split(",")
+
+    # regions
+    if 'regions' in request.GET:
+        params["regions"] = request.GET['regions'].split(",")
+
+    # start_date
+    if 'start_date' in request.GET:
+        try:
+            params["start_date"] = datetime.strptime(request.GET['start_date'], '%Y-%m-%d')
+        except ValueError:
+            return None
+    else:
+        params["start_date"] = date.min
+
+    # end_date
+    if 'end_date' in request.GET:
+        try:
+            params["end_date"] = datetime.strptime(request.GET['end_date'], '%Y-%m-%d')
+        except ValueError:
+            return None
+    else:
+        params["end_date"] = date.max
+
+    # format
+    if 'format' in request.GET:
+        if params["format"] not in ["csv", "json"]:
+            return None
+    else:
+        params["format"] = 'csv'
+
+    return params
+
+
 @csrf_exempt
 def timeseries_post(request, timeseries_name, data_type):
+    # TODO FIX DATA TYPE
 
     try:
         data_type = TimeSeries.TypeChoice[data_type.upper()]
@@ -114,8 +171,10 @@ def timeseries_post(request, timeseries_name, data_type):
 
         # Search for TimeSeries and create it if it does not exist
         # TODO: Allow overwriting of province_state, country_region and lat and long fields?
-        timeseries_entry = TimeSeries.objects.filter(data_type=data["data_type"], timeseries_name=data["timeseries_name"],
-                                                     province_state=data["province_state"], country_region=data["country_region"]).first()
+        timeseries_entry = TimeSeries.objects.filter(data_type=data["data_type"],
+                                                     timeseries_name=data["timeseries_name"],
+                                                     province_state=data["province_state"],
+                                                     country_region=data["country_region"]).first()
         if not timeseries_entry:
             timeseries_entry = TimeSeries(**data)
             timeseries_entry.save()
@@ -154,35 +213,30 @@ def timeseries_post(request, timeseries_name, data_type):
 
 @csrf_exempt
 def timeseries_get(request, timeseries_name, data_type):
-    # TODO: VERIFY PARAMETERS
-    # TODO: Currently does not support active type, active is calculated as confirmed - death - recovered
-    countries = request.GET['countries'].split(
-        ",") if 'countries' in request.GET else None
-    regions = request.GET['regions'].split(
-        ",") if 'regions' in request.GET else None
-    start_date = convert_date(
-        request.GET['start_date']) if 'start_date' in request.GET else date.min
-    end_date = convert_date(
-        request.GET['end_date']) if 'end_date' in request.GET else date.max
-    format = request.GET['format'] if 'format' in request.GET else 'csv'
+    # Getting and verifying parameters
+    params = parse_get_params(request, timeseries_name, data_type)
+    if not params:
+        return HttpResponse('Malformed request', status=400)
 
     # Creating query
     query = {
-        "timeseries_name": timeseries_name,
-        "data_type": TimeSeries.TypeChoice[data_type.upper()],
+        "timeseries_name": params["timeseries_name"],
     }
-    if countries:
-        query["country_region__in"] = countries
-    if regions:
-        query["province_state__in"] = regions
+
+    if params["data_type"] != "ACTIVE":
+        query["data_type"] = TimeSeries.TypeChoice[params["data_type"]]
+    if params["countries"]:
+        query["country_region__in"] = params["countries"]
+    if params["regions"]:
+        query["province_state__in"] = params["regions"]
 
     # Getting associated data entries based on query
     timeseries_list = TimeSeries.objects.filter(**query)
 
     if timeseries_list:
         timeseriesdata_list = TimeSeriesData.objects.filter(
-            timeseries__in=timeseries_list, date__range=[start_date, end_date])
-        if format == "json":
+            timeseries__in=timeseries_list, date__range=[params["start_date"], params["end_date"]])
+        if params["format"] == "json":
             return gen_response_json(timeseries_list, timeseriesdata_list)
         return gen_response_csv(timeseries_list, timeseriesdata_list)
 
@@ -190,7 +244,7 @@ def timeseries_get(request, timeseries_name, data_type):
 
 
 @csrf_exempt
-def timeseries_delete(request, timeseries_name):
+def timeseries_delete(timeseries_name):
     # Getting associated data entries
     timeseries_entries = TimeSeries.objects.filter(
         timeseries_name=timeseries_name)
@@ -206,7 +260,7 @@ def timeseries_delete(request, timeseries_name):
 # **************************************************************************************************** HELPER FUNCTIONS
 
 def gen_response_json(timeseries_list, timeseriesdata_list):
-    #data = serializers.serialize("json", timeseries_list)
+    # data = serializers.serialize("json", timeseries_list)
     response = JsonResponse({'foo': 'bar'})
     # TODO: Implement this
 
@@ -243,6 +297,7 @@ def gen_response_csv(timeseries_list, timeseriesdata_list):
 
 def convert_date(date):
     # 1/23/20 to 2020-01-23
+
     date_split = date.split('/')
 
     month = date_split[0].zfill(2)
