@@ -74,67 +74,6 @@ def _post_body_check(reader):
                 return HttpResponse('Invalid File Contents', status=422)
 
 
-def parse_get_params(request, timeseries_name, data_type):
-    params = {
-        "timeseries_name": None,
-        "data_type": None,
-        "countries": None,
-        "regions": None,
-        "start_date": None,
-        "end_date": None,
-        "format": None,
-    }
-
-    # timeseries_name
-    if timeseries_name:
-        params["timeseries_name"] = timeseries_name
-    else:
-        return None
-
-    # data_type
-    if data_type:
-        if data_type.upper() not in ["DEATHS", "CONFIRMED", "ACTIVE", "RECOVERED"]:
-            return None
-        params["data_type"] = data_type.upper()
-    else:
-        return None
-
-    # countries
-    if 'countries' in request.GET:
-        params["countries"] = request.GET['countries'].split(",")
-
-    # regions
-    if 'regions' in request.GET:
-        params["regions"] = request.GET['regions'].split(",")
-
-    # start_date
-    if 'start_date' in request.GET:
-        try:
-            params["start_date"] = datetime.strptime(request.GET['start_date'], '%Y-%m-%d')
-        except ValueError:
-            return None
-    else:
-        params["start_date"] = date.min
-
-    # end_date
-    if 'end_date' in request.GET:
-        try:
-            params["end_date"] = datetime.strptime(request.GET['end_date'], '%Y-%m-%d')
-        except ValueError:
-            return None
-    else:
-        params["end_date"] = date.max
-
-    # format
-    if 'format' in request.GET:
-        if params["format"] not in ["csv", "json"]:
-            return None
-    else:
-        params["format"] = 'csv'
-
-    return params
-
-
 @csrf_exempt
 def timeseries_post(request, timeseries_name, data_type):
     # TODO FIX DATA TYPE
@@ -169,15 +108,13 @@ def timeseries_post(request, timeseries_name, data_type):
             "long": row[3] if row[3] != '' else 0.0,
         }
 
-        # Search for TimeSeries and create it if it does not exist
-        # TODO: Allow overwriting of province_state, country_region and lat and long fields?
-        timeseries_entry = TimeSeries.objects.filter(data_type=data["data_type"],
-                                                     timeseries_name=data["timeseries_name"],
-                                                     province_state=data["province_state"],
-                                                     country_region=data["country_region"]).first()
-        if not timeseries_entry:
-            timeseries_entry = TimeSeries(**data)
-            timeseries_entry.save()
+        timeseries_entry, created = TimeSeries.objects.update_or_create(
+            data_type=data["data_type"],
+            timeseries_name=data["timeseries_name"],
+            province_state=data["province_state"],
+            country_region=data["country_region"],
+            defaults=data,
+        )
 
         to_create = []
         to_update = []
@@ -195,8 +132,7 @@ def timeseries_post(request, timeseries_name, data_type):
             }
 
             # Search for TimeSeriesData by timeseries and date and create it if it does not exist
-            timeseries_data_entry = timeseries_data_entry_all.filter(
-                date=data["date"]).first()
+            timeseries_data_entry = timeseries_data_entry_all.filter(date=data["date"]).first()
             if not timeseries_data_entry:
                 timeseries_data_entry = TimeSeriesData(**data)
                 to_create.append(timeseries_data_entry)
@@ -259,12 +195,89 @@ def timeseries_delete(timeseries_name):
 
 # **************************************************************************************************** HELPER FUNCTIONS
 
-def gen_response_json(timeseries_list, timeseriesdata_list):
-    # data = serializers.serialize("json", timeseries_list)
-    response = JsonResponse({'foo': 'bar'})
-    # TODO: Implement this
+def parse_get_params(request, timeseries_name, data_type):
+    params = {
+        "timeseries_name": None,
+        "data_type": None,
+        "countries": None,
+        "regions": None,
+        "start_date": None,
+        "end_date": None,
+        "format": None,
+    }
 
-    return response
+    # timeseries_name
+    if timeseries_name:
+        params["timeseries_name"] = timeseries_name
+    else:
+        return None
+
+    # data_type
+    if data_type:
+        if data_type.upper() not in ["DEATHS", "CONFIRMED", "ACTIVE", "RECOVERED"]:
+            return None
+        params["data_type"] = data_type.upper()
+    else:
+        return None
+
+    # countries
+    if 'countries' in request.GET:
+        params["countries"] = request.GET['countries'].split(",")
+
+    # regions
+    if 'regions' in request.GET:
+        params["regions"] = request.GET['regions'].split(",")
+
+    # start_date
+    if 'start_date' in request.GET:
+        try:
+            params["start_date"] = datetime.strptime(request.GET['start_date'], '%Y-%m-%d')
+        except ValueError:
+            return None
+    else:
+        params["start_date"] = date.min
+
+    # end_date
+    if 'end_date' in request.GET:
+        try:
+            params["end_date"] = datetime.strptime(request.GET['end_date'], '%Y-%m-%d')
+        except ValueError:
+            return None
+    else:
+        params["end_date"] = date.max
+
+    # format
+    if 'format' in request.GET:
+        if request.GET['format'] not in ["csv", "json"]:
+            return None
+        params["format"] = request.GET['format']
+    else:
+        params["format"] = 'csv'
+
+    return params
+
+
+def gen_response_json(timeseries_list, timeseriesdata_list):
+    # response = JsonResponse({'foo': 'bar'})
+
+    data = {}
+
+    for index, timeseries in enumerate(timeseries_list):
+        row = {
+            "Province/State": timeseries.province_state,
+            "Country/Region": timeseries.country_region,
+            "Lat": timeseries.lat,
+            "Long": timeseries.long,
+        }
+
+        for timeseriesdata in timeseriesdata_list.filter(timeseries=timeseries).order_by('date'):
+            date = timeseriesdata.date.strftime("%m/%d/%y")
+            cases = timeseriesdata.cases
+            row[date] = cases
+
+        data[index] = row
+
+    return JsonResponse(data)
 
 
 def gen_response_csv(timeseries_list, timeseriesdata_list):
@@ -296,7 +309,8 @@ def gen_response_csv(timeseries_list, timeseriesdata_list):
 
 
 def convert_date(date):
-    # 1/23/20 to 2020-01-23
+    # This function converts a date string in the format of 1/23/20 to a date object in the format of 2020-01-23
+    # This function is for reading csv date headers to store in the database as date objets
 
     date_split = date.split('/')
 
