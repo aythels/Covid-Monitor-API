@@ -3,7 +3,7 @@ from django.shortcuts import render
 
 # Create your views here.
 from io import StringIO
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import csv
 from daily_reports.models import DailyReports
@@ -17,82 +17,81 @@ def dailyreports(request, dailyreport_name):
         return dailyreports_get(request, dailyreport_name)
     elif request.method == 'DELETE':
         return dailyreports_delete(request, dailyreport_name)
-    else:
-        return HttpResponse('Internal server error', status=500)
-
-
-def _fill_empty(data):
-    data['fips'] = -1 if data['fips'] == '' else data['fips']
-    data['lat'] = 0.0 if data['lat'] == '' else data['lat']
-    data['long'] = 0.0 if data['long'] == '' else data['long']
+    return HttpResponse('Internal server error', status=500)
 
 
 def dailyreports_post(request, dailyreport_name):
-    # TODO: add methods to validate data
     body = request.body.decode('utf-8')
     reader = csv.reader(body.split('\n'), delimiter=',')
-    # TODO: validate header has correct number of elements
-    next(reader)
 
-    keys = ["fips", "admin2", "province_state", "country_region", "last_update", "lat", "long",
-            "confirmed", "deaths", "recovered", "active", "combined_key", "incident_rate", "case_fatality_ratio"]
+    # Validating header
+    header = next(reader)
+    if validate_header(header) is False:
+        return HttpResponse('Malformed request', status=400)
 
-    create_queue, update_queue = [], []
+    create_queue = []
+    update_queue = []
+
     for row in reader:
-        # TODO: validate row has same number of elements as keys
-        data = {
-            k: row[i] for i, k in enumerate(keys)
-        }
+        data = parse_post_row(header, row)
+
+        # Validating row
+        if data is None:
+            return HttpResponse('Malformed request', status=400)
+
         data['dailyreport_name'] = dailyreport_name
-        # TODO: validate country_region non empty, last_update non empty, confirmed, deaths, recovered, active, incident_rate, case_fatality_ratio non empty
-        _fill_empty(data)
-        dailyreports_entry = DailyReports.objects.filter(dailyreport_name=dailyreport_name, province_state=data["province_state"], country_region=data["country_region"],
+
+        dailyreports_entry = DailyReports.objects.filter(dailyreport_name=data["dailyreport_name"],
+                                                         province_state=data["province_state"],
+                                                         country_region=data["country_region"],
                                                          last_update=data["last_update"]).first()
         if not dailyreports_entry:
             dailyreports_entry = DailyReports(**data)
             create_queue.append(dailyreports_entry)
         else:
-            dailyreports_entry.confirmed, dailyreports_entry.deaths, dailyreports_entry.recovered, dailyreports_entry.active, dailyreports_entry.incident_rate, dailyreports_entry.case_fatality_ratio = data[
-                "confirmed"], data["deaths"], data["recovered"], data["active"], data["incident_rate"], data["case_fatality_ratio"]
+            dailyreports_entry.confirmed = data["confirmed"]
+            dailyreports_entry.deaths = data["deaths"]
+            dailyreports_entry.recovered = data["recovered"]
+            dailyreports_entry.active = data["active"]
+            dailyreports_entry.incident_rate = data["incident_rate"]
+            dailyreports_entry.case_fatality_ratio = data["case_fatality_ratio"]
             update_queue.append(dailyreports_entry)
 
+    # Bulk update or create
     DailyReports.objects.bulk_create(create_queue)
     DailyReports.objects.bulk_update(update_queue, [
-                                     "confirmed", "deaths", "recovered", "active", "incident_rate", "case_fatality_ratio"])
+        "confirmed",
+        "deaths",
+        "recovered",
+        "active",
+        "incident_rate",
+        "case_fatality_ratio"
+    ])
 
     return HttpResponse('Upload successful', status=200)
 
 
 def dailyreports_get(request, dailyreport_name):
-    countries = request.GET['countries'].split(
-        ",") if 'countries' in request.GET else None
-    regions = request.GET['regions'].split(
-        ",") if 'regions' in request.GET else None
-    combined_key = request.GET['combined_key'] if 'combined_key' in request.GET else None
-    data_type = request.GET['data_type'].split(",") if 'data_type' in request.GET else [
-        'active', 'confirmed', 'deaths', 'recovered']
-    start_date = convert_date(
-        request.GET['start_date']) if 'start_date' in request.GET else date.min
-    end_date = convert_date(
-        request.GET['end_date']) if 'end_date' in request.GET else date.max
-    format = request.GET['format'] if 'format' in request.GET else 'csv'
+    # validating params
+    params = parse_get_params(request, dailyreport_name)
+    if params is None:
+        return HttpResponse('Malformed request', status=400)
 
     query = {
-        "dailyreport_name": dailyreport_name,
+        "dailyreport_name": params["dailyreport_name"],
+        "last_update__range": [params["start_date"], params["end_date"]]
     }
-    if countries:
-        query["country_region__in"] = countries
-    if regions:
-        query["province_state__in"] = regions
-    if combined_key:
-        query["combined_key__exact"] = combined_key
-    query["last_update__range"] = [start_date, end_date]
+    if params["countries"] is not None:
+        query["country_region__in"] = params["countries"]
+    if params["regions"] is not None:
+        query["province_state__in"] = params["regions"]
+    if params["combined_key"] is not None:
+        query["combined_key__exact"] = params["combined_key"]
 
     dailyreports_list = DailyReports.objects.filter(**query)
-    if format == "json":
-        get_response_json(dailyreports_list, data_type)
-    else:
-        return get_response_csv(dailyreports_list, data_type)
+    if params["format"] == "json":
+        return get_response_json(dailyreports_list, params["data_type"])
+    return get_response_csv(dailyreports_list, params["data_type"])
 
     return HttpResponse('Received {}'.format(dailyreport_name))
 
@@ -105,6 +104,48 @@ def dailyreports_delete(request, dailyreport_name):
         dailyreports_entries.delete()
         return HttpResponse('Successfully deleted', status=200)
     return HttpResponse('Dailyreports not found', status=404)
+
+
+# **************************************************************************************************** HELPER FUNCTIONS
+
+def get_response_json(dailyreports_list, data_type):
+    data = {}
+
+    for index, dailyreport in enumerate(dailyreports_list):
+        row = {
+            'Province_State': dailyreport.province_state,
+            'Country_Region': dailyreport.country_region,
+            'Last_Update': dailyreport.last_update.strftime("%Y-%m-%d %H:%M:%S"),
+            'active': -1,
+            'confirmed': -1,
+            'deaths': -1,
+            'recovered': -1,
+            'Combined_Key': dailyreport.combined_key,
+            'Incidence_Rate': dailyreport.incident_rate,
+            'Case-Fatality_Ratio': dailyreport.case_fatality_ratio,
+        }
+
+        if "active" in data_type:
+            row["active"] = dailyreport.active
+        if "confirmed" in data_type:
+            row["confirmed"] = dailyreport.confirmed
+        if "deaths" in data_type:
+            row["deaths"] = dailyreport.deaths
+        if "recovered" in data_type:
+            row["recovered"] = dailyreport.recovered
+
+        if row["active"] == -1:
+            row.pop("active", None)
+        if row["confirmed"] == -1:
+            row.pop("confirmed", None)
+        if row["deaths"] == -1:
+            row.pop("deaths", None)
+        if row["recovered"] == -1:
+            row.pop("recovered", None)
+
+        data[index] = row
+
+    return JsonResponse(data)
 
 
 def get_response_csv(dailyreports_list, data_type):
@@ -123,15 +164,16 @@ def get_response_csv(dailyreports_list, data_type):
         ]
 
         middle = []
-        for type in data_type:
-            if type == "active":
-                middle.append(dailyreport.active)
-            elif type == "confirmed":
-                middle.append(dailyreport.confirmed)
-            elif type == "deaths":
-                middle.append(dailyreport.deaths)
-            else:
-                middle.append(dailyreport.recovered)
+
+        if "active" in data_type:
+            middle.append(dailyreport.active)
+        if "confirmed" in data_type:
+            middle.append(dailyreport.confirmed)
+        if "deaths" in data_type:
+            middle.append(dailyreport.deaths)
+        if "recovered" in data_type:
+            middle.append(dailyreport.recovered)
+
         suffix = [
             dailyreport.combined_key,
             dailyreport.incident_rate,
@@ -141,5 +183,189 @@ def get_response_csv(dailyreports_list, data_type):
     return response
 
 
-def convert_date(date):
-    return datetime.strptime(date, '%y-%m-%d')
+def validate_header(header):
+    # Not enough columns
+    if len(header) < 14:
+        return False
+
+    # Invalid columns headers
+    if header[0] != 'FIPS':
+        return False
+    if header[1] != 'Admin2':
+        return False
+    if header[2] != 'Province_State':
+        return False
+    if header[3] != 'Country_Region':
+        return False
+    if header[4] != 'Last_Update':
+        return False
+    if header[5] != 'Lat':
+        return False
+    if header[6] != 'Long_':
+        return False
+    if header[7] != 'Confirmed':
+        return False
+    if header[8] != 'Deaths':
+        return False
+    if header[9] != 'Recovered':
+        return False
+    if header[10] != 'Active':
+        return False
+    if header[11] != 'Combined_Key':
+        return False
+    if header[12] != 'Incident_Rate':
+        return False
+    if header[13] != 'Case_Fatality_Ratio':
+        return False
+
+    return True
+
+
+def parse_post_row(header, row):
+    # Not enough columns
+    if len(row) < len(header):
+        return None
+
+    # Assigning default values
+    params = {
+        "fips": -1 if row[0] == '' else row[0],
+        "admin2": row[1],
+        "province_state": row[2],
+        "country_region": row[3],
+        "last_update": row[4],
+        "lat": 0.0 if row[5] == '' else row[5],
+        "long": 0.0 if row[6] == '' else row[6],
+        "confirmed": 0 if row[7] == '' else row[7],
+        "deaths": 0 if row[8] == '' else row[8],
+        "recovered": 0 if row[9] == '' else row[9],
+        "active": 0 if row[10] == '' else row[10],
+        "combined_key": row[11],
+        "incident_rate": row[12],
+        "case_fatality_ratio": row[13],
+    }
+
+    # Default value check
+    if params['country_region'] == "":
+        return None
+    if params['last_update'] == "":
+        return None
+    if params['lat'] == "":
+        return None
+    if params['long'] == "":
+        return None
+    if params['confirmed'] == "":
+        return None
+    if params['deaths'] == "":
+        return None
+    if params['recovered'] == "":
+        return None
+    if params['active'] == "":
+        return None
+    if params['incident_rate'] == "":
+        return None
+    if params['case_fatality_ratio'] == "":
+        return None
+
+    # Type check
+
+    if params['fips'] != "":
+        try:
+            params['fips'] = int(params['fips'])
+        except ValueError:
+            return None
+    if params['last_update'] != "":
+        try:
+            params['last_update'] == datetime.strptime(params['last_update'], "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            return None
+    if params['lat'] != "":
+        try:
+            params['lat'] = float(params['lat'])
+        except ValueError:
+            return None
+    if params['long'] != "":
+        try:
+            params['long'] = float(params['long'])
+        except ValueError:
+            return None
+    if params['confirmed'] != "":
+        try:
+            params['confirmed'] = int(params['confirmed'])
+        except ValueError:
+            return None
+    if params['deaths'] != "":
+        try:
+            params['deaths'] = int(params['deaths'])
+        except ValueError:
+            return None
+    if params['recovered'] != "":
+        try:
+            params['recovered'] = int(params['recovered'])
+        except ValueError:
+            return None
+    if params['active'] != "":
+        try:
+            params['active'] = int(params['active'])
+        except ValueError:
+            return None
+    if params['incident_rate'] != "":
+        try:
+            params['incident_rate'] = float(params['incident_rate'])
+        except ValueError:
+            return None
+    if params['case_fatality_ratio'] != "":
+        try:
+            params['case_fatality_ratio'] = float(params['case_fatality_ratio'])
+        except ValueError:
+            return None
+
+    # Other
+
+    if params["active"] == 0:
+        params["active"] = params["confirmed"] - params["deaths"] - params["recovered"]
+
+    if -90 > params['lat'] or params['lat'] > 90 or -180 > params['long'] or params['long'] > 180:
+        return None
+
+    return params
+
+
+def parse_get_params(request, dailyreport_name):
+    params = {
+        "dailyreport_name": dailyreport_name,
+        "countries": None,
+        "regions": None,
+        "combined_key": None,
+        "data_type": ['active', 'confirmed', 'deaths', 'recovered'],
+        "start_date": date.min,
+        "end_date": date.max,
+        "format": 'csv',
+    }
+
+    if 'countries' in request.GET:
+        params["countries"] = request.GET['countries'].split(",")
+    if 'regions' in request.GET:
+        params["regions"] = request.GET['regions'].split(",")
+    if 'combined_key' in request.GET:
+        params["combined_key"] = request.GET['combined_key']
+    if 'data_type' in request.GET:
+        params["data_type"] = request.GET['data_type'].split(",")
+        for t in params["data_type"]:
+            if t not in ['active', 'confirmed', 'deaths', 'recovered']:
+                return None
+    if 'start_date' in request.GET:
+        try:
+            params["start_date"] = datetime.strptime(request.GET['start_date'], '%Y-%m-%d')
+        except ValueError:
+            return None
+    if 'end_date' in request.GET:
+        try:
+            params["end_date"] = datetime.strptime(request.GET['end_date'], '%Y-%m-%d')
+        except ValueError:
+            return None
+    if 'format' in request.GET:
+        if request.GET['format'] not in ["csv", "json"]:
+            return None
+        params["format"] = request.GET['format']
+
+    return params
