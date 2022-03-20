@@ -90,7 +90,7 @@ def dailyreports_get(request, dailyreport_name):
 
     dailyreports_list = DailyReports.objects.filter(**query)
     if params["format"] == "json":
-        get_response_json(dailyreports_list, params["data_type"])
+        return get_response_json(dailyreports_list, params["data_type"])
     return get_response_csv(dailyreports_list, params["data_type"])
 
     return HttpResponse('Received {}'.format(dailyreport_name))
@@ -109,9 +109,43 @@ def dailyreports_delete(request, dailyreport_name):
 # **************************************************************************************************** HELPER FUNCTIONS
 
 def get_response_json(dailyreports_list, data_type):
-    response = JsonResponse({'foo': 'bar'})
+    data = {}
 
-    return response
+    for index, dailyreport in enumerate(dailyreports_list):
+        row = {
+            'Province_State': dailyreport.province_state,
+            'Country_Region': dailyreport.country_region,
+            'Last_Update': dailyreport.last_update.strftime("%Y-%m-%d %H:%M:%S"),
+            'active': -1,
+            'confirmed': -1,
+            'deaths': -1,
+            'recovered': -1,
+            'Combined_Key': dailyreport.combined_key,
+            'Incidence_Rate': dailyreport.incident_rate,
+            'Case-Fatality_Ratio': dailyreport.case_fatality_ratio,
+        }
+
+        if "active" in data_type:
+            row["active"] = dailyreport.active
+        if "confirmed" in data_type:
+            row["confirmed"] = dailyreport.confirmed
+        if "deaths" in data_type:
+            row["deaths"] = dailyreport.deaths
+        if "recovered" in data_type:
+            row["recovered"] = dailyreport.recovered
+
+        if row["active"] == -1:
+            row.pop("active", None)
+        if row["confirmed"] == -1:
+            row.pop("confirmed", None)
+        if row["deaths"] == -1:
+            row.pop("deaths", None)
+        if row["recovered"] == -1:
+            row.pop("recovered", None)
+
+        data[index] = row
+
+    return JsonResponse(data)
 
 
 def get_response_csv(dailyreports_list, data_type):
@@ -130,15 +164,16 @@ def get_response_csv(dailyreports_list, data_type):
         ]
 
         middle = []
-        for type in data_type:
-            if type == "active":
-                middle.append(dailyreport.active)
-            elif type == "confirmed":
-                middle.append(dailyreport.confirmed)
-            elif type == "deaths":
-                middle.append(dailyreport.deaths)
-            else:
-                middle.append(dailyreport.recovered)
+
+        if "active" in data_type:
+            middle.append(dailyreport.active)
+        if "confirmed" in data_type:
+            middle.append(dailyreport.confirmed)
+        if "deaths" in data_type:
+            middle.append(dailyreport.deaths)
+        if "recovered" in data_type:
+            middle.append(dailyreport.recovered)
+
         suffix = [
             dailyreport.combined_key,
             dailyreport.incident_rate,
