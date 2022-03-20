@@ -30,4 +30,4 @@ jobs:
         coverage run --source='.' covidAPI/manage.py test
     - name: Generate Test Coverage
       run: |
-        coverate report
+        coverage report
