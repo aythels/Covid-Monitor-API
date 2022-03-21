@@ -267,9 +267,9 @@ def parse_get_params(request, timeseries_name, data_type):
 
     # data_type
     if data_type:
-        if data_type not in ["deaths", "confirmed", "active", "recovered"]:
+        if data_type.upper() not in ["DEATHS", "CONFIRMED", "RECOVERED", "ACTIVE"]:
             return None
-        if data_type != "active":
+        if data_type.upper() != "ACTIVE":
             params["data_type"] = TimeSeries.TypeChoice[data_type.upper()]
     else:
         return None
