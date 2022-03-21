@@ -7,6 +7,7 @@ import csv
 from time_series.models import TimeSeries, TimeSeriesData
 from datetime import date, datetime
 
+
 # TODO Probably need a try catch block when saving to database due to character count or database errors
 
 @csrf_exempt
@@ -15,7 +16,11 @@ def timeseries(request, timeseries_name, data_type):
         return timeseries_post(request, timeseries_name, data_type)
     elif request.method == 'GET':
         return timeseries_get(request, timeseries_name, data_type)
-    elif request.method == 'DELETE':
+    return HttpResponse('Internal server error', status=500)
+
+@csrf_exempt
+def timeseries2(request, timeseries_name):
+    if request.method == 'DELETE':
         return timeseries_delete(request, timeseries_name)
     return HttpResponse('Internal server error', status=500)
 
@@ -53,13 +58,13 @@ def timeseries_post(request, timeseries_name, data_type):
             "data_type": params["data_type"],
             "province_state": row['Province/State'],
             "country_region": row['Country/Region'],
-            "lat": row['Lat'],
-            "long": row['Long'],
+            "lat": 49.2827,
+            "long": 123.1207,
         }
 
         timeseries_entry, created = TimeSeries.objects.update_or_create(
-            data_type=data["data_type"],
             timeseries_name=data["timeseries_name"],
+            data_type=data["data_type"],
             province_state=data["province_state"],
             country_region=data["country_region"],
             defaults=data,
@@ -97,7 +102,7 @@ def timeseries_post(request, timeseries_name, data_type):
 
 
 def timeseries_get(request, timeseries_name, data_type):
-    # TODO FIX ACTIVE FETCH
+    # TODO FIX ACTIVE FETCH + ADD ERROR
 
     # Getting and verifying parameters
     params = parse_get_params(request, timeseries_name, data_type)
@@ -126,7 +131,10 @@ def timeseries_get(request, timeseries_name, data_type):
             return gen_response_json(timeseries_list, timeseriesdata_list)
         return gen_response_csv(timeseries_list, timeseriesdata_list)
 
-    return HttpResponse('Malformed request', status=400)
+    # return empty arrays if data not available
+    if params["format"] == "json":
+        return gen_response_json([], [])
+    return gen_response_csv([], [])
 
 
 def timeseries_delete(request, timeseries_name):
@@ -324,8 +332,11 @@ def gen_response_csv(timeseries_list, timeseriesdata_list):
     response = HttpResponse(content_type='application/csv')
 
     dates = []
-    for date in timeseriesdata_list.values_list('date', flat=True).distinct().order_by('date'):
-        dates.append(date.strftime("%m/%d/%y"))
+    for timeseriesdata in timeseriesdata_list:
+        date_obj = timeseriesdata.date
+        date_str = date_obj.strftime("%m/%d/%y")
+        if date_str not in dates:
+            dates.append(date_str)
 
     writer = csv.writer(response)
     writer.writerow(

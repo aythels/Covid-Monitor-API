@@ -6,5 +6,5 @@ urlpatterns = [
     path('<str:timeseries_name>/<str:data_type>',
          views.timeseries, name='timeseries'),
     path('<str:timeseries_name>',
-         views.timeseries, name='timeseries_delete'),
+         views.timeseries2, name='timeseries_delete'),
 ]
