@@ -14,7 +14,7 @@
 ## Introduction
 CovidAPI provides convenient access to retrieving, storing, and deleting covid related data in csv format. 
 
-API is accessible via this link [​​https://covid-api-group24.herokuapp.com](https://covid-api-group24.herokuapp.com). 
+API is accessible via [​​https://covid-api-group24.herokuapp.com](https://covid-api-group24.herokuapp.com). 
 
 **Disclaimer**: We are using heroku’s free tier that only provides 10,000 rows in our postgres database. 
 
