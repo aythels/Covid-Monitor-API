@@ -31,54 +31,49 @@ API is accessible via [​​https://covid-api-group24.herokuapp.com](https://co
 ## Examples
 Time Series `POST`
 ```bash
-    curl -X 'POST' \
-    'https://covid-api-group24.herokuapp.com/time_series/timeseries000/confirmed' \
-    -H 'accept: application/json' \
-    -H 'Content-Type: application/csv' \
-    -d 'Province/State,Country/Region,Lat,Long,1/22/20,1/23/20,1/24/20
-    ,Afghanistan,33.93911,67.709953,1,2,3
-    ,Albania,41.1533,20.1683,1,3,5
-    Australian Capital Territory,Australia,-35.4735,149.0124,0,0,1
-    New South Wales,Australia,-33.8688,151.2093,2,4,6
-    '
+    curl --location --request POST 'https://covid-api-group24.herokuapp.com/time_series/timeseries0000/confirmed' \
+--header 'Content-Type: application/csv' \
+--data-raw 'Province/State,Country/Region,Lat,Long,1/22/20,1/23/20,1/24/20
+,Afghanistan,33.93911,67.709953,0,0,0
+,Albania,41.1533,20.1683,1,3,5 
+Australian Capital Territory,Australia,-35.4735,149.0124,0,0,1 
+New South Wales,Australia,-33.8688,151.2093,2,4,6 '
 ```
 
 Time Series `GET`
 ```bash
     curl -X 'GET' \
-  'https://covid-api-group24.herokuapp.com/time_series/timeseries000/confirmed?start_date=20%2F1%2F22&end_date=20%2F1%2F24&countries=Afghanistan&format=csv' \
+  'https://covid-api-group24.herokuapp.com/time_series/timeseries0000/confirmed?start_date=2020-01-22&end_date=2020-01-23&countries=Afghanistan&format=csv' \
   -H 'accept: application/csv'
 ```
 
 Time Series `DELETE`
 ```bash
     curl -X 'DELETE' \
-  'https://covid-api-group24.herokuapp.com/time_series/timeseries000' \
+  'https://covid-api-group24.herokuapp.com/time_series/timeseries0000' \
   -H 'accept: application/json'
 
 ```
 
 Daily Reports `POST`
 ```bash
-    curl -X 'POST' \
-    'https://covid-api-group24.herokuapp.com/daily_reports/dailyreport000' \
-    -H 'accept: application/json' \
-    -H 'Content-Type: application/csv' \
-    -d 'FIPS,Admin2,Province_State,Country_Region,Last_Update,Lat,Long_,Confirmed,Deaths,Recovered,Active,Combined_Key,Incidence_Rate,Case-Fatality_Ratio
-    45001,Abbeville,South Carolina,US,2020-06-06 02:33:00,34.22333378,-82.46170658,47,0,0,47,"Abbeville, South Carolina, US",191.625555510254,0.0
-    22001,Acadia,Louisiana,US,2020-06-06 02:33:00,30.2950649,-92.41419698,467,26,0,441,"Acadia, Louisiana, US",752.6795068095737,5.56745182012848
-    '
+    curl --location --request POST 'https://covid-api-group24.herokuapp.com/daily_reports/dailyreport0000' \
+--header 'Content-Type: application/csv' \
+--header 'accept: application/json' \
+--data-raw 'FIPS,Admin2,Province_State,Country_Region,Last_Update,Lat,Long_,Confirmed,Deaths,Recovered,Active,Combined_Key,Incidence_Rate,Case-Fatality_Ratio
+45001,Abbeville,South Carolina,US,2020-06-06 02:33:00,34.22333378,-82.46170658,47,0,0,47,"Abbeville, South Carolina, US",191.625555510254,0.0
+22001,Acadia,Louisiana,US,2020-06-06 02:33:00,30.2950649,-92.41419698,467,26,0,441,"Acadia, Louisiana, US",752.6795068095737,5.56745182012848'
 ```
 Daily Reports `GET`
 ```bash
     curl -X 'GET' \
-    'https://covid-api-group24.herokuapp.com/daily_reports/dailyreport000?start_date=20%2F6%2F6&end_date=20%2F6%2F7&countries=US&regions=South%20Carolina,Louisiana&data_type=active&format=csv' \
-    -H 'accept: application/csv'
+  'https://covid-api-group24.herokuapp.com/daily_reports/dailyreport0000?start_date=2020-06-06&end_date=2020-06-07&countries=US&regions=South+Carolina&format=json' \
+  -H 'accept: application/csv'
 ```
 Daily Reports `DELETE`
 ```bash
     curl -X 'DELETE' \
-    'https://covid-api-group24.herokuapp.com/daily_reports/dailyreports000' \
+    'https://covid-api-group24.herokuapp.com/daily_reports/dailyreport0000' \
     -H 'accept: application/json'
 ```
 
