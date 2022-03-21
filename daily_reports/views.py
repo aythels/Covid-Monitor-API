@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from django.shortcuts import render
 
 # Create your views here.
@@ -89,11 +89,10 @@ def dailyreports_get(request, dailyreport_name):
         query["combined_key__exact"] = params["combined_key"]
 
     dailyreports_list = DailyReports.objects.filter(**query)
+
     if params["format"] == "json":
         return get_response_json(dailyreports_list, params["data_type"])
     return get_response_csv(dailyreports_list, params["data_type"])
-
-    return HttpResponse('Received {}'.format(dailyreport_name))
 
 
 def dailyreports_delete(request, dailyreport_name):
@@ -122,13 +121,13 @@ def get_response_json(dailyreports_list, data_type):
         }
 
         if "active" in data_type:
-            row["active"] = dailyreport.active
+            row["Active"] = dailyreport.active
         if "confirmed" in data_type:
-            row["confirmed"] = dailyreport.confirmed
+            row["Confirmed"] = dailyreport.confirmed
         if "deaths" in data_type:
-            row["deaths"] = dailyreport.deaths
+            row["Deaths"] = dailyreport.deaths
         if "recovered" in data_type:
-            row["recovered"] = dailyreport.recovered
+            row["Recovered"] = dailyreport.recovered
 
         data[index] = row
 
@@ -140,7 +139,8 @@ def get_response_csv(dailyreports_list, data_type):
 
     writer = csv.writer(response)
     writer.writerow(
-        ['Province_State', 'Country_Region', 'Last_Update'] + data_type +
+        ['Province_State', 'Country_Region', 'Last_Update'] +
+        [x.title() for x in data_type] +
         ['Combined_Key', 'Incidence_Rate', 'Case-Fatality_Ratio']
     )
     for dailyreport in dailyreports_list:
@@ -176,15 +176,25 @@ def validate_header(header):
         return False
 
     # Invalid Column Headers
-    column_strings = ['FIPS', 'Admin2', 'Province_State', 'Country_Region', 'Last_Update', 'Lat', 'Long_', 'Confirmed', 'Deaths',
-    'Recovered', 'Active', 'Combined_Key', 'Incidence_Rate', 'Case-Fatality_Ratio']
+    column_strings = [
+        'FIPS',
+        'Admin2',
+        'Province_State',
+        'Country_Region',
+        'Last_Update',
+        'Lat',
+        'Long_',
+        'Confirmed',
+        'Deaths',
+        'Recovered',
+        'Active',
+        'Combined_Key',
+        'Incidence_Rate',
+        'Case-Fatality_Ratio']
     for i in range(len(header)):
         if header[i] != column_strings[i]:
-            print(header[i])
             return False
     return True
-
-
 
 
 def parse_post_row(header, row):
@@ -211,7 +221,8 @@ def parse_post_row(header, row):
     }
 
     # Default value check
-    non_empty_keys = ["country_region", "last_update", "lat", "long", "confirmed", "deaths", "recovered", "active", "incidence_rate", "case_fatality_ratio"]
+    non_empty_keys = ["country_region", "last_update", "lat", "long", "confirmed", "deaths", "recovered", "active",
+                      "incidence_rate", "case_fatality_ratio"]
     for key in non_empty_keys:
         if params[key] == "":
             return None
@@ -225,7 +236,6 @@ def parse_post_row(header, row):
             except ValueError:
                 return False
         return True
-
 
     if not params_check(int, 'fips'): return None
     if not params_check(float, 'lat'): return None
@@ -242,7 +252,6 @@ def parse_post_row(header, row):
             params['last_update'] = datetime.strptime(params['last_update'], "%Y-%m-%d %H:%M:%S")
         except ValueError:
             return None
-
 
     # Other
 
@@ -285,7 +294,8 @@ def parse_get_params(request, dailyreport_name):
             return None
     if 'end_date' in request.GET:
         try:
-            params["end_date"] = datetime.strptime(request.GET['end_date'], '%Y-%m-%d')
+            # Adding one day to end date because of off by one error due to hours
+            params["end_date"] = datetime.strptime(request.GET['end_date'], '%Y-%m-%d') + timedelta(days=1)
         except ValueError:
             return None
     if 'format' in request.GET:
