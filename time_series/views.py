@@ -18,6 +18,7 @@ def timeseries(request, timeseries_name, data_type):
         return timeseries_get(request, timeseries_name, data_type)
     return HttpResponse('Internal server error', status=500)
 
+
 @csrf_exempt
 def timeseries2(request, timeseries_name):
     if request.method == 'DELETE':
@@ -102,8 +103,6 @@ def timeseries_post(request, timeseries_name, data_type):
 
 
 def timeseries_get(request, timeseries_name, data_type):
-    # TODO FIX ACTIVE FETCH + ADD ERROR
-
     # Getting and verifying parameters
     params = parse_get_params(request, timeseries_name, data_type)
     if params is None:
@@ -114,22 +113,29 @@ def timeseries_get(request, timeseries_name, data_type):
         "timeseries_name": params["timeseries_name"],
     }
 
-    if params["data_type"] != "ACTIVE":
-        query["data_type"] = params["data_type"]
     if params["countries"] is not None:
         query["country_region__in"] = params["countries"]
     if params["regions"] is not None:
         query["province_state__in"] = params["regions"]
 
-    # Getting associated data entries based on query
-    timeseries_list = TimeSeries.objects.filter(**query)
+    if params["data_type"] is not None:
+        query["data_type"] = params["data_type"]
+        timeseries_list = TimeSeries.objects.filter(**query)
 
-    if timeseries_list:
-        timeseriesdata_list = TimeSeriesData.objects.filter(
-            timeseries__in=timeseries_list, date__range=[params["start_date"], params["end_date"]])
-        if params["format"] == "json":
-            return gen_response_json(timeseries_list, timeseriesdata_list)
-        return gen_response_csv(timeseries_list, timeseriesdata_list)
+        if timeseries_list:
+            timeseriesdata_list = TimeSeriesData.objects.filter(
+                timeseries__in=timeseries_list,
+                date__range=[params["start_date"],
+                             params["end_date"]])
+            if params["format"] == "json":
+                return gen_response_json(timeseries_list, timeseriesdata_list)
+            return gen_response_csv(timeseries_list, timeseriesdata_list)
+
+    else:
+        # This block is specifically for calculating active cases
+        response = calculate_active(query, params)
+        if response:
+            return response
 
     # return empty arrays if data not available
     if params["format"] == "json":
@@ -260,9 +266,10 @@ def parse_get_params(request, timeseries_name, data_type):
 
     # data_type
     if data_type:
-        if data_type.upper() not in ["DEATHS", "CONFIRMED", "ACTIVE", "RECOVERED"]:
+        if data_type not in ["deaths", "confirmed", "active", "recovered"]:
             return None
-        params["data_type"] = TimeSeries.TypeChoice[data_type.upper()]
+        if data_type != "active":
+            params["data_type"] = TimeSeries.TypeChoice[data_type.upper()]
     else:
         return None
 
@@ -308,7 +315,7 @@ def gen_response_json(timeseries_list, timeseriesdata_list):
 
     data = {}
 
-    for index, timeseries in enumerate(timeseries_list):
+    for index, timeseries in  enumerate(timeseries_list):
         row = {
             "Province/State": timeseries.province_state,
             "Country/Region": timeseries.country_region,
@@ -316,10 +323,11 @@ def gen_response_json(timeseries_list, timeseriesdata_list):
             "Long": timeseries.long,
         }
 
-        for timeseriesdata in timeseriesdata_list.filter(timeseries=timeseries).order_by('date'):
-            date = timeseriesdata.date.strftime("%m/%d/%y")
-            cases = timeseriesdata.cases
-            row[date] = cases
+        for timeseriesdata in timeseriesdata_list:
+            if timeseriesdata.timeseries == timeseries:
+                date = timeseriesdata.date.strftime("%m/%d/%y")
+                cases = timeseriesdata.cases
+                row[date] = cases
 
         data[index] = row
 
@@ -350,8 +358,71 @@ def gen_response_csv(timeseries_list, timeseriesdata_list):
             timeseries.long,
         ]
 
-        suffix = timeseriesdata_list.filter(timeseries=timeseries).values_list(
-            'cases', flat=True).order_by('date')
-        writer.writerow(prefix + list(suffix))
+        cases = []
+        for timeseriesdata in timeseriesdata_list:
+            if timeseriesdata.timeseries == timeseries:
+                cases.append(timeseriesdata.cases)
+
+        writer.writerow(prefix + cases)
 
     return response
+
+
+def calculate_active(query, params):
+    # getting row prefix
+    timeseries_list_confirmed = TimeSeries.objects.filter(
+        **query,
+        data_type=TimeSeries.TypeChoice["confirmed".upper()])
+    timeseries_list_deaths = TimeSeries.objects.filter(
+        **query,
+        data_type=TimeSeries.TypeChoice["deaths".upper()])
+
+    # datasets must exist
+    if not timeseries_list_confirmed or not timeseries_list_deaths:
+        return None
+
+    # datasets must match
+    if timeseries_list_confirmed.count() != timeseries_list_deaths.count():
+        return None
+
+    for entry in timeseries_list_confirmed:
+        if not timeseries_list_deaths.filter(
+                timeseries_name=entry.timeseries_name,
+                province_state=entry.province_state,
+                country_region=entry.country_region,
+                lat=entry.lat,
+                long=entry.long):
+            return None
+
+    # getting row suffix
+    timeseriesdata_list_confirmed = TimeSeriesData.objects.filter(
+        timeseries__in=timeseries_list_confirmed,
+        date__range=[params["start_date"], params["end_date"]])
+    timeseriesdata_list_deaths = TimeSeriesData.objects.filter(
+        timeseries__in=timeseries_list_deaths,
+        date__range=[params["start_date"], params["end_date"]])
+
+    # datasets must exist
+    if not timeseriesdata_list_confirmed or not timeseriesdata_list_deaths:
+        return None
+
+    # datasets must match
+    if timeseriesdata_list_confirmed.count() != timeseriesdata_list_deaths.count():
+        return None
+
+    for confirmed in timeseriesdata_list_confirmed:
+        death = timeseriesdata_list_deaths.filter(date=confirmed.date).first()
+        if not death:
+            return None
+
+        # calculating active cases
+        confirmed.cases = confirmed.cases - death.cases
+
+        # value must be > 0
+        if confirmed.cases < 0:
+            return None
+
+    # generating response
+    if params["format"] == "json":
+        return gen_response_json(timeseries_list_confirmed, timeseriesdata_list_confirmed)
+    return gen_response_csv(timeseries_list_confirmed, timeseriesdata_list_confirmed)

@@ -2,6 +2,7 @@ from datetime import datetime
 
 from django.test import TestCase
 from .models import TimeSeries, TimeSeriesData
+from .views import parse_post_header
 
 
 class TimeSeriesViewsPost(TestCase):
@@ -205,9 +206,24 @@ class TimeSeriesViewsDelete(TestCase):
     def test_delete_available(self):
         response = self.client.delete('/time_series/test1')
         self.assertEqual(response.status_code, 200)
-        pass
 
     def test_delete_unavailable(self):
         response = self.client.delete('/time_series/sfafasgasgasgasgagsa')
         self.assertEqual(response.status_code, 404)
-        pass
+
+
+class TimeSeriesViewsHelper(TestCase):
+
+    def test_parse_post_header_valid(self):
+        str = 'Province/State,Country/Region,Lat,Long,1/22/20,1/23/20'.split(',')
+        self.assertEqual(parse_post_header(str), [
+            'Province/State',
+            'Country/Region',
+            'Lat',
+            'Long',
+            datetime(2020, 1, 22),
+            datetime(2020, 1, 23)])
+
+    def test_parse_post_header_invalid(self):
+        str = 'Provinasfasfasfce/State,Country/Region,Lat,Long,1/22/20,1/23/20'.split(',')
+        self.assertEqual(parse_post_header(str), None)
