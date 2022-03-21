@@ -217,9 +217,10 @@ def parse_post_row(header, row):
 
     # Cases must be integers > 0
     for cases in row[4:]:
-        if not cases.isdigit():
+        try:
+            params['CASES'].append(int(cases))
+        except ValueError:
             return None
-        params['CASES'].append(cases)
 
     return params
 
@@ -231,7 +232,7 @@ def parse_post_params(timeseries_name, data_type):
     }
 
     # timeseries_name
-    if timeseries_name:
+    if timeseries_name is not None or timeseries_name != '':
         params["timeseries_name"] = timeseries_name
     else:
         return None
@@ -315,7 +316,7 @@ def gen_response_json(timeseries_list, timeseriesdata_list):
 
     data = {}
 
-    for index, timeseries in  enumerate(timeseries_list):
+    for index, timeseries in enumerate(timeseries_list):
         row = {
             "Province/State": timeseries.province_state,
             "Country/Region": timeseries.country_region,
