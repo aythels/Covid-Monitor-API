@@ -19,19 +19,19 @@ API is accessible via [​​https://covid-api-group24.herokuapp.com](https://co
 **Disclaimer**: We are using heroku’s free tier that only provides 10,000 rows in our postgres database. 
 
 ## Routes
-| Method   | Route                                                       | Status Code                                                                               | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-|----------|-------------------------------------------------------------|-------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `POST`   | <br><pre>`/time_series/{timeseries_name}/{data_type}`</pre> | `200 Upload successful`<br><br>`400 Malformed request`<br><br>`422 Invalid file contents` | Create or update a Time Series<br><br>timeseries_name*: `string`<br>data_type*: `'deaths' \| 'confirmed' \| 'recovered'`<br><br>Body must have a well formatted csv which means header of csv content should be `Province/State, Country/Region, Lat, Long, ...dates`<br>Each date must be in the format `DD/MM/YY`. Columns under `Country/Region` cannot be empty.<br>Content-type should be `application/csv`                                                                   |
-| `GET`    | <br><pre>`/time_series/{timeseries_name}/{data_type}`</pre> | `200 Successful operation`<br><br>`400 Malformed Request`                                 | Retrieve a Time Series<br><br>timeseries_name*: `string`<br>data_type*: `'deaths' \| 'confirmed' \| 'recovered' \| 'active'`<br>start_date: `YYYY-MM-DD`<br>end_date: `YYYY-MM-DD`<br>countries: `string[]`<br>regions: `string[]`<br>format: `'csv' \| 'json'`                                                                                                                                                                                                                    |
-| `DELETE` | <br><pre>`/time_series/{timeseries_name}`</pre>             | `200 Successfully deleted`<br><br>`404 Timeseries not found`                              | Delete a Time Series<br><br>timeseries_name*: `string`                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `POST`   | <br><pre>`/daily_reports/{dailyreport_name}`</pre>          | `200 Upload successful`<br><br>`400 Malformed request`<br><br>`422 Invalid file contents` | Create or update a Daily Report<br><br>dailyreport_name*: `string`<br><br>Body must have a well formatted csv which means header of csv content should be `FIPS, Admin2, Province_State, Country_Region, Last_Update, Lat, Long_, Confirmed, Deaths, Recovered, Active, Combined_Key, Incidence_Rate, Case-Fatality_Ratio`.<br>Columns under `Country_Region`, `Last_Update`, `Incidence_Rate`, `Case-Fatality_Ratio` cannot be empty.<br>Content-type should be `application/csv` |
-| `GET`    | <br><pre>`/daily_reports/{dailyreport_name}`</pre>          | `200 Successful operation`<br><br>`400 Malformed Request`                                 | Retrieve a Daily Report<br><br>dailyreport_name*: `string`<br>start_date: `YYYY-MM-DD`<br>end_date: `YYYY-MM-DD`<br>countries: `[string]`<br>regions: `[string]`<br>format: `'csv' \| 'json'`<br>combined_key: `'string'`<br>data_type: `'deaths' \| 'confirmed' \| 'recovered' \| 'active'`                                                                                                                                                                                       |
-| `DELETE` | <br><pre>`/daily_reports/{dailyreport_name}`</pre>          | `200 Successfully deleted`<br><br>`404 Daily Reports not found`                           | Delete a Daily Report<br><br>dailyreport_name*: `string`                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Method   | Route                                                       | Status Code                                                                               | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+|----------|-------------------------------------------------------------|-------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `POST`   | <br><pre>`/time_series/{timeseries_name}/{data_type}`</pre> | `200 Upload successful`<br><br>`400 Malformed request`<br><br>`422 Invalid file contents` | Create or update a Time Series<br><br>timeseries_name*: `string`<br>data_type*: `'deaths' \| 'confirmed' \| 'recovered'`<br><br>Body must have a well formatted csv which means header of csv content should be `Province/State, Country/Region, Lat, Long, ...dates`<br><br>Each date must be in the format `DD/MM/YY`. Columns under `Country/Region` cannot be empty.<br><br>Content-type should be `application/csv`                                                                   |
+| `GET`    | <br><pre>`/time_series/{timeseries_name}/{data_type}`</pre> | `200 Successful operation`<br><br>`400 Malformed Request`                                 | Retrieve a Time Series<br><br>timeseries_name*: `string`<br>data_type*: `'deaths' \| 'confirmed' \| 'recovered' \| 'active'`<br>start_date: `YYYY-MM-DD`<br>end_date: `YYYY-MM-DD`<br>countries: `string[]`<br>regions: `string[]`<br>format: `'csv' \| 'json'`                                                                                                                                                                                                                            |
+| `DELETE` | <br><pre>`/time_series/{timeseries_name}`</pre>             | `200 Successfully deleted`<br><br>`404 Timeseries not found`                              | Delete a Time Series<br><br>timeseries_name*: `string`                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `POST`   | <br><pre>`/daily_reports/{dailyreport_name}`</pre>          | `200 Upload successful`<br><br>`400 Malformed request`<br><br>`422 Invalid file contents` | Create or update a Daily Report<br><br>dailyreport_name*: `string`<br><br>Body must have a well formatted csv which means header of csv content should be `FIPS, Admin2, Province_State, Country_Region, Last_Update, Lat, Long_, Confirmed, Deaths, Recovered, Active, Combined_Key, Incidence_Rate, Case-Fatality_Ratio`.<br><br>Columns under `Country_Region`, `Last_Update`, `Incidence_Rate`, `Case-Fatality_Ratio` cannot be empty.<br><br>Content-type should be `application/csv` |
+| `GET`    | <br><pre>`/daily_reports/{dailyreport_name}`</pre>          | `200 Successful operation`<br><br>`400 Malformed Request`                                 | Retrieve a Daily Report<br><br>dailyreport_name*: `string`<br>start_date: `YYYY-MM-DD`<br>end_date: `YYYY-MM-DD`<br>countries: `[string]`<br>regions: `[string]`<br>format: `'csv' \| 'json'`<br>combined_key: `'string'`<br>data_type: `'deaths' \| 'confirmed' \| 'recovered' \| 'active'`                                                                                                                                                                                               |
+| `DELETE` | <br><pre>`/daily_reports/{dailyreport_name}`</pre>          | `200 Successfully deleted`<br><br>`404 Daily Reports not found`                           | Delete a Daily Report<br><br>dailyreport_name*: `string`                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 ## Examples
 Time Series `POST`
 ```bash
-    curl --location --request POST 'https://covid-api-group24.herokuapp.com/time_series/timeseries0000/confirmed' \
+curl --location --request POST 'https://covid-api-group24.herokuapp.com/time_series/timeseries0000/confirmed' \
 --header 'Content-Type: application/csv' \
 --data-raw 'Province/State,Country/Region,Lat,Long,1/22/20,1/23/20,1/24/20
 ,Afghanistan,33.93911,67.709953,0,0,0
@@ -42,22 +42,21 @@ New South Wales,Australia,-33.8688,151.2093,2,4,6 '
 
 Time Series `GET`
 ```bash
-    curl -X 'GET' \
-  'https://covid-api-group24.herokuapp.com/time_series/timeseries0000/confirmed?start_date=2020-01-22&end_date=2020-01-23&countries=Afghanistan&format=csv' \
-  -H 'accept: application/csv'
+curl -X 'GET' \
+'https://covid-api-group24.herokuapp.com/time_series/timeseries0000/confirmed?start_date=2020-01-22&end_date=2020-01-23&countries=Afghanistan&format=csv' \
+-H 'accept: application/csv'
 ```
 
 Time Series `DELETE`
 ```bash
-    curl -X 'DELETE' \
-  'https://covid-api-group24.herokuapp.com/time_series/timeseries0000' \
-  -H 'accept: application/json'
-
+curl -X 'DELETE' \
+'https://covid-api-group24.herokuapp.com/time_series/timeseries0000' \
+-H 'accept: application/json'
 ```
 
 Daily Reports `POST`
 ```bash
-    curl --location --request POST 'https://covid-api-group24.herokuapp.com/daily_reports/dailyreport0000' \
+curl --location --request POST 'https://covid-api-group24.herokuapp.com/daily_reports/dailyreport0000' \
 --header 'Content-Type: application/csv' \
 --header 'accept: application/json' \
 --data-raw 'FIPS,Admin2,Province_State,Country_Region,Last_Update,Lat,Long_,Confirmed,Deaths,Recovered,Active,Combined_Key,Incidence_Rate,Case-Fatality_Ratio
@@ -66,15 +65,15 @@ Daily Reports `POST`
 ```
 Daily Reports `GET`
 ```bash
-    curl -X 'GET' \
-  'https://covid-api-group24.herokuapp.com/daily_reports/dailyreport0000?start_date=2020-06-06&end_date=2020-06-07&countries=US&regions=South+Carolina&format=json' \
-  -H 'accept: application/csv'
+curl -X 'GET' \
+'https://covid-api-group24.herokuapp.com/daily_reports/dailyreport0000?start_date=2020-06-06&end_date=2020-06-07&countries=US&regions=South+Carolina&format=json' \
+-H 'accept: application/csv'
 ```
 Daily Reports `DELETE`
 ```bash
-    curl -X 'DELETE' \
-    'https://covid-api-group24.herokuapp.com/daily_reports/dailyreport0000' \
-    -H 'accept: application/json'
+curl -X 'DELETE' \
+'https://covid-api-group24.herokuapp.com/daily_reports/dailyreport0000' \
+-H 'accept: application/json'
 ```
 
 ## Local Setup
