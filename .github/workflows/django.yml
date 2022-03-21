@@ -46,9 +46,6 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v2
-      - name: log secrets
-        run: |
-          echo ${{secrets.HEROKU_APP_NAME}}}
       - name: Deploy to Heroku
         uses: akhileshns/heroku-deploy@v3.12.12
         with:
