@@ -12,7 +12,9 @@
 
 
 ## Introduction
-CovidAPI provides convenient access to retrieving, storing, and deleting covid related data in csv format. API is accessible via this link [​​https://covid-api-group24.herokuapp.com](https://covid-api-group24.herokuapp.com). 
+CovidAPI provides convenient access to retrieving, storing, and deleting covid related data in csv format. 
+
+API is accessible via this link [​​https://covid-api-group24.herokuapp.com](https://covid-api-group24.herokuapp.com). 
 
 **Disclaimer**: We are using heroku’s free tier that only provides 10,000 rows in our postgres database. 
 
@@ -82,7 +84,7 @@ Daily Reports `DELETE`
 
 ## Local Setup
 1. Install from requirements.txt in root directory
-`$ pip install -r requirements.txt ` \
+`$ pip install -r requirements.txt `
 2. Set up a PostgreSQL database locally according to the database configuration found in covidAPI/settings.py. 
 3. Create Postgres tables  from covidAPI folder
 ```bash
@@ -94,8 +96,8 @@ $ python manage.py sqlmigrate daily_reports 0001
 $ python manage.py migrate daily_reports
 ```
 4. Running server from root directory
-`$ python manage.py runserver` \
-5. Access server through [http://127.0.0.1:8000/](http://127.0.0.1:8000/) \
+`$ python manage.py runserver`
+5. Access server through [http://127.0.0.1:8000/](http://127.0.0.1:8000/)
 
 
 In order to run tests for projects
@@ -109,20 +111,23 @@ coverage report
 
 ## Program Design
 ### Tech Stack
-Our API is built with Django for our web server, PostgreSQL for persistent storage, Gunicorn for Server Gateway Interface, Heroku for deployment, Github Actions for CI/CD, pytest-cov for test coverage
+Our API is built with Django for our web server, PostgreSQL for persistent storage, Gunicorn for Server Gateway Interface, Heroku for deployment, Github Actions for CI/CD, pytest-cov for test coverage.
 
 ### Project Structure
 We utilized the default project structure django provides. Since time_series and daily_reports are not connected, we created two different ‘apps’ under our django project for each of them. Within an app there contains files, admin.py (file related to the admin configuration of Django), apps.py (exposes the app to whole django project), models.py (an ORM to define our model classes), tests.py (tests for our app; can contain both e2e and unit tests), urls.py(define a regex to match path to corresponding functions), views.py (contains the logic of process request and sending response). Within the main folder for django API(covidAPI in our case). settings.py contains important settings such as config necessary for deployment and connection to postgres database, urls.py contains the base route we are exposing on our server. 
 
 ### Data storage
 For timeseries, we stored all metadata (Province,Country,Lat,Long) in one row of our database. The dates with counts for each date are then stored separately in another table with a foreign key that references the corresponding province, country. We designed our relationship this way because there is no way of knowing how many dates the user will send to us in the POST request, we want to accommodate any number of dates the user provides. An alternative consideration is to not use a RDMS and use a document database like MongoDB and we could bypass the need to have two data models/ tables.
+
 <img width="813" alt="Screen Shot 2022-03-21 at 4 32 50 PM" src="https://user-images.githubusercontent.com/43018123/159358984-becc9bd5-e76d-4ad1-857a-9aad0aa5537e.png">
 
-For daily reports, we simply stored all the information the user sends in a POST into one table. This is because there is only one date in each row of the csv, so there’s no need to accommodate for an arbitrary number of dates. The benefit of storing in one table is that, in the future, if we wanted to query for countries across different daily reports the user sends, we can easily query by country_name instead of having to do complex joins with a secondary table to get all our necessary data. 
+For daily reports, we simply stored all the information the user sends in a POST into one table. This is because there is only one date in each row of the csv, so there’s no need to accommodate for an arbitrary number of dates. The benefit of storing in one table is that, in the future, if we wanted to query for countries across different daily reports the user sends, we can easily query by country_name instead of having to do complex joins with a secondary table to get all our necessary data.
+
 <img width="1111" alt="Screen Shot 2022-03-21 at 4 33 52 PM" src="https://user-images.githubusercontent.com/43018123/159359130-66458a8b-80e2-4f71-bccc-689efc9f8090.png">
 
 ### CI/ CD 
-We use Github Actions for our CI/ CD. When a user creates a PR, our CI pipeline runs the unit tests and e2e tests, it will warn the user if any of the tests fail. Once a PR is ready to be merged into main. The main will re rerun the CI pipeline as a double check and run the CD pipeline which deploys our application to Heroku 
+We use Github Actions for our CI/ CD. When a user creates a PR, our CI pipeline runs the unit tests and e2e tests, it will warn the user if any of the tests fail. Once a PR is ready to be merged into main. The main will re rerun the CI pipeline as a double check and run the CD pipeline which deploys our application to Heroku.
+
 <img width="964" alt="Screen Shot 2022-03-21 at 4 35 09 PM" src="https://user-images.githubusercontent.com/43018123/159359336-0909c7e4-555d-45c4-b62d-0914293ff4c7.png">
 
 ## Pair Programming
@@ -136,7 +141,7 @@ Since we were both new to Django when we both started, this peer programming ses
 ### Second Session
 In contrast to the first session, pair programming was used near the end of the project in creating unit tests with a focus on improving code quality.
 
-Discussing edge cases in the unit tests during the pair programming sessions allowed us to reflect on the implementation of the API routes. This was crucial in ensuring that we both understood the project prompt correctly since we worked on different parts of the API. In writing the unit tests, we encountered several bugs such as forgetting to type check an invalid parameter or formatting the export csv incorrectly. The root of the problem was identified quickly because we were able to bounce suggestions off each other in real time during the pair programming session
+Discussing edge cases in the unit tests during the pair programming sessions allowed us to reflect on the implementation of the API routes. This was crucial in ensuring that we both understood the project prompt correctly since we worked on different parts of the API. In writing the unit tests, we encountered several bugs such as forgetting to type check an invalid parameter or formatting the export csv incorrectly. The root of the problem was identified quickly because we were able to bounce suggestions off each other in real time during the pair programming session.
 
 ### Positives
 Can be used to introduce the project to the driver in the onboarding process. The watcher who is teaching can help troubleshoot minor but obscure bugs and difficulties that may arise during setup that would otherwise take a long time to resolve due to lack of experience with the tech stack.
@@ -155,8 +160,5 @@ Our conclusion regarding pair programming is that minimizing intermissions and c
 
 ## Creators
 
-**Tom Kan**
-- <https://github.com/TomKan0909>
-
-**Elson Liang**
-- <https://github.com/aythels>
+- [Elson Liang](https://github.com/aythels)
+- [Tom Kan](https://github.com/TomKan0909)
